@@ -1,0 +1,8 @@
+matplotlib==3.3.0
+numpy==1.19.1
+pandas
+scipy
+pendulum
+requests
+boto3==1.16.25
+ds_utils @ git+ssh://github.com/healthcarecom/datascience-utils.git#egg=ds_utils
