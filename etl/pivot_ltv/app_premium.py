@@ -45,6 +45,7 @@ def view_create():
             WHERE agency_id NOT ILIKE '%test%'
                 AND upper(status) IN ('NEW', 'PENDING','IN_PROGRESS', 'PROCESSED', 'CANCELLED')
                 AND upper(product_type) IN ('BTM', 'STM')
+                AND premium_amount IS NOT null
             GROUP BY 1,2
             ),
         app_addon AS (
@@ -73,6 +74,7 @@ def view_create():
             WHERE agency_id NOT ILIKE '%test%'
                 AND upper(status) IN ('NEW', 'PENDING','IN_PROGRESS', 'PROCESSED', 'CANCELLED')
                 AND upper(product_type) IN ('DENTAL', 'VISION', 'SUPPLEMENTAL')
+                AND premium_amount IS NOT null
             GROUP BY 1,2
             ),
         tracking AS (
