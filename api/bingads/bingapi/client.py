@@ -1,4 +1,3 @@
-import logging
 import bingads
 
 import os.path
@@ -17,15 +16,10 @@ VALID_AGES = ["EighteenToTwentyFour",
                 "Unknown"]
 
 CAMPAIGN_STATUSES = ["Active", "Paused"]
-
 ADGROUP_STATUSES = ["Active", "Expired", "Paused"]
-
 MATCH_TYPES = ["Exact", "Broad", "Phrase"]
-
 CRITERION_STATUSES = ["Active", "Paused", "Deleted"]
-
 DEVICES = ["Computers", "Tablets", "Smartphones"]
-
 GENDERS = ["Female", "Male", "Unknown"]
 
 # Based on the client used for ETLs
@@ -50,6 +44,7 @@ class BingClient(LocalAuthorizationData):
                  dev_token: str,
                  client_id: str,
                  refresh_token: Optional[str],
+                 campaign_id: Optional[int],
                  env: Optional[str] = 'production'):
         super().__init__(account_id, customer_id, dev_token, client_id, refresh_token)
         self.campaign_id = None
@@ -271,3 +266,40 @@ class BingClient(LocalAuthorizationData):
 
         return response
 
+    def get_keywords(self, adgroup_id, keyword_ids):
+        response = self.campaign_service.GetKeywordsByIds(
+            AdGroupId = adgroup_id,
+            KeywordIds = {'long': keyword_ids}
+        )
+
+        return response
+
+    def update_keyword_bids(self, adgroup_id, keyword_ids, new_bids):
+        kw_response = self.get_keywords(adgroup_id, keyword_ids)
+        if kw_response is None or not hasattr(kw_response, 'Keywords'):
+            print('Bad keywords fetch')
+            return None
+        else:
+            keywords = kw_response['Keywords']
+
+        for idx, kw_bid in enumerate(new_bids):
+            kw_object = set_elements_to_none(self.campaign_service.factory.create('Keyword'))
+            bid_object = set_elements_to_none(self.campaign_service.factory.create('Bid'))
+            bid_object.Amount = kw_bid
+            kw_object.Bid = bid_object
+            kw_object.Id = keywords['Keyword'][idx].Id
+            keywords['Keyword'][idx] = kw_object
+
+        response = self.campaign_service.UpdateKeywords(
+                AdGroupId = adgroup_id,
+                Keywords = keywords,
+                ReturnInheritedBidStrategyTypes = False
+            )
+
+        if response is not None and hasattr(response, 'PartialErrors'):
+            if len(response['PartialErrors']) > 0:
+                print(response['PartialErrors'])
+                return False
+            else:
+                return True
+        return False
