@@ -15,7 +15,7 @@ import math
 
 #### DEFINE GLOBAL VARIABLES ####
 
-CLICKS = 120 #click threshold. level at which kw uses all of its own data
+CLICKS = 60 # click threshold. level at which kw uses all of its own data
 ROI_TARGET = 1.2 # target we are aiming
 MAX_PUSH = 0.2
 MAX_CUT = -0.2
@@ -26,7 +26,7 @@ WEEKDAY =  dt.date.today().weekday()
 CAMPAIGN = "O65"
 
 #### IMPORT DATA ####
-df = pd.read_csv("/Users/david/hc_local/data-science-media-alpha/ma.csv")  
+df = pd.read_csv("ma.csv")
 
 
 #### PROCESS DATE ####
@@ -112,7 +112,6 @@ decay_factor = 0.03
 df_days_back = df["days_back"].unique() -1
 days_back_list = df_days_back.tolist()
 decay_multiplier_list = []
-
 for days_back in days_back_list:
     decay_multiplier = math.exp( -decay_factor * days_back )
     decay_multiplier_list.append(decay_multiplier)
