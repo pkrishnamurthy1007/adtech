@@ -2,8 +2,28 @@
 
 ## Authentication
 
-A helper file (`client_helper.py`) includes all the needed methods to authenticate a
-client with the Bing API
+You need a `config.json` file with the following fields in order to authenticate properly:
+
+```json
+{
+    "BING_CLIENT_ID": "",
+    "BING_CUSTOMER_ID": "",
+    "BING_DEVELOPER_TOKEN": "",
+    "BING_REFRESH_TOKEN": ""
+}
+```
+
+## Default test
+
+The default test loads a CSV file (at `data/bids.csv`) and updates the bids for specific keywords in specific adgroups.
+
+The CSV file must contain at least the following columns:
+
+* `adgroup_id`
+* `keyword_id`
+* `bid`
+
+Updates are done in bulk for each adgroup. A success status is printed for each adgroup being processed.
 
 ## Campaign creation
 
