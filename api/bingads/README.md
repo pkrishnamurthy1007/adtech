@@ -6,6 +6,7 @@ You need a `config.json` file with the following fields in order to authenticate
 
 ```json
 {
+	"BING_ACCOUNT_ID": "",
     "BING_CLIENT_ID": "",
     "BING_CUSTOMER_ID": "",
     "BING_DEVELOPER_TOKEN": "",
