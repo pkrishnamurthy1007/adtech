@@ -44,7 +44,6 @@ class BingClient(LocalAuthorizationData):
                  dev_token: str,
                  client_id: str,
                  refresh_token: Optional[str],
-                 campaign_id: Optional[int],
                  env: Optional[str] = 'production'):
         super().__init__(account_id, customer_id, dev_token, client_id, refresh_token)
         self.campaign_id = None

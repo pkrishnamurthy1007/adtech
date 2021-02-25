@@ -18,8 +18,7 @@ def main():
                  customer_id = credentials['BING_CUSTOMER_ID'],
                  dev_token = credentials['BING_DEVELOPER_TOKEN'],
                  client_id = credentials['BING_CLIENT_ID'],
-                 refresh_token = credentials['BING_REFRESH_TOKEN'],
-                 campaign_id = 361209675
+                 refresh_token = credentials['BING_REFRESH_TOKEN']
             )
 
     # print(client.get_campaigns('Audience'))
