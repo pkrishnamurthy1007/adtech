@@ -4,17 +4,115 @@ from ds_utils.db.connectors import PivotDW
 schema = 'tracking'
 table = 'app_premium'
 
-"""
-app_premium
-app_members
-app_ltv
-"""
 
 def view_create():
 
     create = f"""
         CREATE MATERIALIZED VIEW {schema}.{table} AS
-        WITH date_limit AS (SELECT max(datetime_created::DATE) AS maxdate FROM ph_transactional.application),
+        WITH
+            date_limit AS (
+                SELECT max(datetime_created::DATE) AS maxdate 
+                FROM ph_transactional.application
+                ),
+            bad_pids AS (
+                SELECT DISTINCT app_pid 
+                FROM ph_transactional.application 
+                WHERE (
+                    status IN ('FAKE', 'VOID') OR
+                    agency_id ILIKE '%test%'
+                    )
+                    AND app_pid IS NOT null
+                ),
+            health_fixes AS (
+                SELECT DISTINCT app_pid, 
+                    first_value(product_type IGNORE NULLS) OVER (
+                        PARTITION BY app_pid ORDER BY effective_date ASC
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                        ) AS product_type_base,
+                    first_value(premium_amount IGNORE NULLS) OVER (
+                        PARTITION BY app_pid ORDER BY effective_date ASC
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                        ) AS premium_amount_base
+                FROM ph_transactional.application
+                WHERE app_pid IS NOT null
+                    AND upper(product_type) IN ('STM', 'BTM')
+                ),
+            base_filtered AS (
+                SELECT
+                    upper(coalesce(a.product_type, f.product_type_base)) AS product_fixed,
+                    a.expiration_date - a.effective_date + 1 AS coverage_duration_fixed,
+                    coalesce(a.premium_amount, f.premium_amount_base) AS premium_fixed,
+                    a.*
+                FROM ph_transactional.application AS a
+                LEFT JOIN bad_pids AS b
+                    ON a.app_pid = b.app_pid
+                LEFT JOIN health_fixes AS f
+                    ON a.app_pid = f.app_pid
+                WHERE coalesce(a.product_type, f.product_type_base) IS NOT null
+                    AND a.app_pid IS NOT null
+                    AND b.app_pid IS null
+                 ),
+            health_cancelled AS (
+                SELECT DISTINCT
+                    app_pid,
+                    min(effective_date) AS health_min_effective_date,
+                    min(least(termination_date, date_cancelled)) AS health_lapse_date
+                FROM base_filtered AS a
+                WHERE app_pid IS NOT null
+                    AND product_fixed IN ('STM', 'BTM')
+                    AND coalesce(termination_date, date_cancelled) IS NOT null
+                GROUP BY 1
+                ),
+            addon_cancelled AS (
+                SELECT 
+                    app_pid,
+                    min(effective_date) AS addon_min_effective_date,
+                    min(least(termination_date, date_cancelled)) AS addon_lapse_date
+                FROM base_filtered
+                WHERE app_pid IS NOT null
+                    AND product_fixed IN ('DENTAL', 'VISION', 'SUPPLEMENTAL')
+                    AND coalesce(termination_date, date_cancelled) IS NOT null
+                GROUP BY 1
+                ),
+        base_fixed AS (
+            SELECT
+                b.app_pid,
+                coalesce(b.foreign_pid, b.app_pid::VARCHAR) AS foreign_pid,
+                b.product_fixed AS product_type,
+                b.coverage_duration_fixed AS coverage_duration,
+                greatest(CASE
+                    WHEN upper(b.payment_frequency) = 'PREPAID' THEN b.expiration_date + 1
+                    WHEN b.expiration_date <= d.maxdate THEN coalesce(h.health_lapse_date, b.expiration_date + 1) 
+                    WHEN b.expiration_date > d.maxdate THEN coalesce(h.health_lapse_date, greatest(d.maxdate, b.effective_date)) 
+                    ELSE h.health_lapse_date END - b.effective_date, 0) AS health_duration_inforce,
+                greatest(coalesce(a.addon_lapse_date, greatest(d.maxdate, b.effective_date)) - b.effective_date, 0) AS addon_duration_inforce,
+                CASE WHEN upper(b.payment_frequency) = 'PREPAID' THEN 1 ELSE 0 END AS is_prepaid,
+                b.status,
+                b.carrier_id,
+                b.effective_date,
+                b.expiration_date,
+                h.health_min_effective_date,
+                h.health_lapse_date,
+                a.addon_min_effective_date,
+                a.addon_lapse_date,
+                b.datetime_created,
+                b.datetime_modified,
+                least(h.health_lapse_date, a.addon_lapse_date) AS termination_date,
+                CASE WHEN upper(payment_frequency) = 'PREPAID'
+                    THEN (b.premium_fixed / b.coverage_duration_fixed::NUMERIC * 30.436875)::NUMERIC(9,4)
+                    ELSE b.premium_fixed END AS premium_amount,
+                b.billing_fee,
+                b.association_fee,
+                b.application_fee,
+                b.admin_fee,
+                b.extras_amount
+            FROM base_filtered AS b
+            CROSS JOIN date_limit AS d
+            LEFT JOIN health_cancelled AS h
+                ON h.app_pid = b.app_pid
+            LEFT JOIN addon_cancelled AS a
+                ON a.app_pid = b.app_pid
+            ),
         app_base AS (
             SELECT
                 app_pid,
@@ -24,57 +122,48 @@ def view_create():
                 min(datetime_created) AS datetime_created,
                 max(datetime_modified) AS datetime_modified,
                 min(effective_date) AS effective_date,
-                least(min(date_cancelled), min(termination_date)) AS termination_date,
+                min(health_lapse_date) AS termination_date,
                 max(expiration_date) AS expiration_date,
                 sum(coverage_duration) AS duration_sold,
-                sum(CASE 
-                    WHEN effective_date <= maxdate - 1 
-                    AND least(date_cancelled, termination_date, expiration_date) > effective_date
-                    THEN least(maxdate - 1, date_cancelled, termination_date, expiration_date) -  effective_date + 1
-                    ELSE null END) AS duration_utilized,
-                max(max_months_rated_on) AS max_months_rated_on,
-                max(sequence_max) AS sequence_max,
+                sum(health_duration_inforce) AS duration_inforce,
+                max(is_prepaid) AS is_prepaid,
+                count(nullif(coverage_duration, 0)) AS sequence_max,
                 sum(premium_amount * coverage_duration) / sum(coverage_duration) AS premium_health,
                 nullif(sum(billing_fee * coverage_duration) / sum(coverage_duration), 0.0) AS billing_fee_health,
                 nullif(sum(association_fee * coverage_duration) / sum(coverage_duration), 0.0) AS association_fee_health,
                 nullif(sum(admin_fee * coverage_duration) / sum(coverage_duration), 0.0) AS admin_fee_health,
                 nullif(max(application_fee), 0.0) AS enrollment_fee_health,
                 nullif(sum(extras_amount * coverage_duration) / sum(coverage_duration), 0.0) AS premium_rider
-            FROM ph_transactional.application
-            CROSS JOIN date_limit
-            WHERE agency_id NOT ILIKE '%test%'
-                AND upper(status) IN ('NEW', 'PENDING','IN_PROGRESS', 'PROCESSED', 'CANCELLED')
-                AND upper(product_type) IN ('BTM', 'STM')
-                AND premium_amount IS NOT null
+            FROM base_fixed
+            WHERE product_type IN ('BTM', 'STM')
             GROUP BY 1,2
             ),
         app_addon AS (
             SELECT
-                app_pid,
-                coalesce(foreign_pid, app_pid::VARCHAR) AS foreign_pid,
-                count(DISTINCT foreign_pid) AS fpids,
-                any_value(product_type) AS product_type,
-                any_value(carrier_id) AS carrier_id,
-                min(datetime_created) AS datetime_created,
-                max(datetime_modified) AS datetime_modified,
-                min(effective_date) AS effective_date,
-                least(min(date_cancelled), min(termination_date)) AS termination_date,
-                max((product_type = 'DENTAL')::INT) AS has_dental,
-                max((product_type = 'VISION')::INT) AS has_vision,
-                max((product_type = 'SUPPLEMENTAL')::INT) AS has_supp,
-                sum(CASE WHEN product_type = 'DENTAL' THEN premium_amount ELSE null END) AS premium_dental,
-                sum(CASE WHEN product_type = 'VISION' THEN premium_amount ELSE null END) AS premium_vision,
-                sum(CASE WHEN product_type = 'SUPPLEMENTAL' THEN premium_amount ELSE null END) AS premium_supp,
-                sum(CASE WHEN product_type = 'DENTAL' THEN nullif(association_fee, 0.0) ELSE null END) AS association_fee_dental,
-                sum(CASE WHEN product_type = 'DENTAL' THEN nullif(application_fee, 0.0) ELSE null END) AS enrollment_fee_dental,
-                sum(CASE WHEN product_type = 'DENTAL' THEN admin_fee ELSE null END) AS admin_fee_dental,
-                sum(CASE WHEN product_type = 'VISION' THEN admin_fee ELSE null END) AS admin_fee_vision
-            FROM ph_transactional.application
-            CROSS JOIN date_limit
-            WHERE agency_id NOT ILIKE '%test%'
-                AND upper(status) IN ('NEW', 'PENDING','IN_PROGRESS', 'PROCESSED', 'CANCELLED')
-                AND upper(product_type) IN ('DENTAL', 'VISION', 'SUPPLEMENTAL')
-                AND premium_amount IS NOT null
+                    app_pid,
+                    coalesce(foreign_pid, app_pid::VARCHAR) AS foreign_pid,
+                    count(DISTINCT foreign_pid) AS fpids,
+                    any_value(product_type) AS product_type,
+                    any_value(carrier_id) AS carrier_id,
+                    min(datetime_created) AS datetime_created,
+                    max(datetime_modified) AS datetime_modified,
+                    min(effective_date) AS effective_date,
+                    min(addon_lapse_date) AS termination_date,
+                    avg(nullif(addon_duration_inforce, 0)) AS duration_inforce,
+                    max(is_prepaid) AS is_prepaid,
+                    max((product_type = 'DENTAL')::INT) AS has_dental,
+                    max((product_type = 'VISION')::INT) AS has_vision,
+                    max((product_type = 'SUPPLEMENTAL')::INT) AS has_supp,
+                    sum(CASE WHEN product_type = 'DENTAL' THEN premium_amount ELSE null END) AS premium_dental,
+                    sum(CASE WHEN product_type = 'VISION' THEN premium_amount ELSE null END) AS premium_vision,
+                    sum(CASE WHEN product_type = 'SUPPLEMENTAL' THEN premium_amount ELSE null END) AS premium_supp,
+                    sum(CASE WHEN product_type = 'DENTAL' THEN nullif(association_fee, 0.0) ELSE null END) AS association_fee_dental,
+                    sum(CASE WHEN product_type = 'DENTAL' THEN nullif(application_fee, 0.0) ELSE null END) AS enrollment_fee_dental,
+                    sum(CASE WHEN product_type = 'DENTAL' THEN admin_fee ELSE null END) AS admin_fee_dental,
+                    sum(CASE WHEN product_type = 'VISION' THEN admin_fee ELSE null END) AS admin_fee_vision
+                FROM base_fixed
+                WHERE product_type IN ('DENTAL', 'VISION', 'SUPPLEMENTAL')
+                    AND premium_amount IS NOT null
             GROUP BY 1,2
             ),
         tracking AS (
@@ -109,8 +198,7 @@ def view_create():
                     ) AS state
             FROM ph_transactional.application 
             WHERE agency_id NOT ILIKE '%test%'
-                AND upper(status) IN ('NEW', 'PENDING','IN_PROGRESS', 'PROCESSED', 'CANCELLED')
-            ),
+                    ),
         app_premium AS (
             SELECT
                 coalesce(s.app_pid, a.app_pid) AS app_pid,
@@ -120,7 +208,7 @@ def view_create():
                 CASE 
                     WHEN s.product_type IS NOT null THEN s.product_type
                     WHEN s.product_type IS null AND a.has_dental = 1 THEN 'DENTAL - SA'
-                    WHEN s.product_type IS null AND a.has_dental = 0 AND a.has_supp = 1 THEN 'SUPP - SA'
+                    WHEN s.product_type IS null AND a.has_dental = 0 AND a.has_supp = 1 THEN 'SUPPLEMENTAL - SA'
                     ELSE null END AS product_type,
                 coalesce(a.has_dental, 0) AS has_dental,
                 coalesce(a.has_vision, 0) AS has_vision,
@@ -129,18 +217,9 @@ def view_create():
                 coalesce(s.termination_date, a.termination_date) AS termination_date,
                 s.expiration_date,
                 s.duration_sold,
-                coalesce(
-                    s.duration_utilized, 
-                    CASE WHEN a.effective_date <= maxdate - 1
-                        THEN least(maxdate - 1, a.termination_date) -  a.effective_date + 1
-                        ELSE null END
-                    ) AS duration_utilized,
-               CASE
-                   WHEN s.max_months_rated_on IS null OR s.sequence_max IS null THEN null
-                   WHEN s.max_months_rated_on = 0 OR s.sequence_max = 0 then '90x1'
-                   WHEN s.max_months_rated_on = 12 THEN '364x' || s.sequence_max
-                   WHEN s.max_months_rated_on IN ('3', '6') THEN s.max_months_rated_on * 30 || 'x' || s.sequence_max
-                   END AS duration_category,
+                coalesce(s.duration_inforce, a.duration_inforce) AS duration_inforce,
+                coalesce(s.is_prepaid, a.is_prepaid) AS is_prepaid,
+                s.sequence_max,
                 s.premium_health,
                 s.premium_rider,
                 a.premium_dental,
@@ -170,7 +249,6 @@ def view_create():
                 AND s.foreign_pid = a.foreign_pid
             LEFT JOIN tracking AS t
                 ON coalesce(s.app_pid, a.app_pid) = t.app_pid
-            CROSS JOIN date_limit
             ),
         member_ages AS (
             SELECT
@@ -224,17 +302,51 @@ def view_create():
             a.app_pid,
             a.foreign_pid,
             a.datetime_created,
+            a.termination_date,
+            CASE 
+                WHEN coalesce(a.termination_date, a.expiration_date) - a.effective_date <= 10 
+                    THEN 'CANCELLED'
+                WHEN coalesce(a.termination_date, a.expiration_date) - a.effective_date > 10
+                    AND coalesce(a.termination_date, a.expiration_date) <= maxdate
+                    THEN 'LAPSED'
+                WHEN coalesce(a.termination_date, a.expiration_date) IS null
+                    OR coalesce(a.termination_date, a.expiration_date) > maxdate
+                    THEN 'ACTIVE'
+                ELSE 'UNKNOWN' END AS status,
             a.carrier_id,
             a.product_type,
             a.has_dental,
             a.has_vision,
             a.has_supp,
             a.effective_date,
-            a.termination_date,
             a.expiration_date,
+            CASE
+                WHEN a.duration_sold < 45 THEN '30'
+                WHEN a.duration_sold BETWEEN 45 AND 74 THEN '60'
+                WHEN a.duration_sold BETWEEN 75 AND 134 THEN '90'
+                WHEN a.duration_sold BETWEEN 135 AND 264 THEN '180'
+                WHEN a.duration_sold BETWEEN 265 AND 364 THEN '364'
+                WHEN a.duration_sold > 364 THEN '364+'
+                ELSE null END AS plan_group,
+            CASE
+                WHEN a.duration_sold / a.sequence_max < 45 THEN '30'
+                WHEN a.duration_sold / a.sequence_max BETWEEN 45 AND 74 THEN '60'
+                WHEN a.duration_sold / a.sequence_max BETWEEN 75 AND 134 THEN '90'
+                WHEN a.duration_sold / a.sequence_max BETWEEN 135 AND 264 THEN '180'
+                WHEN a.duration_sold / a.sequence_max > 264 THEN '364'
+                ELSE null END || 'x' || sequence_max::VARCHAR AS plan_type,
+            CASE
+                WHEN a.duration_sold / a.sequence_max < 45 THEN 1
+                WHEN a.duration_sold / a.sequence_max BETWEEN 45 AND 74 THEN 2
+                WHEN a.duration_sold / a.sequence_max BETWEEN 75 AND 134 THEN 3
+                WHEN a.duration_sold / a.sequence_max BETWEEN 135 AND 264 THEN 4
+                WHEN a.duration_sold / a.sequence_max > 264 THEN 5
+                ELSE 6 END AS plan_type_order,
+            a.sequence_max,
             a.duration_sold,
-            a.duration_utilized,
-            a.duration_category,
+            a.duration_inforce,
+            a.is_prepaid,
+            (a.duration_inforce::NUMERIC / a.duration_sold::NUMERIC)::NUMERIC(5,4) AS inforce_percent,
             a.premium_health,
             a.premium_rider,
             a.premium_dental,
@@ -265,11 +377,13 @@ def view_create():
             a.phone_md5,
             a.agent_id,
             a.agency_id,
-            a.datetime_modified AS app_last_modified
+            a.datetime_modified AS app_last_modified,
+            d.maxdate AS asof_date
         FROM app_premium AS a
         LEFT JOIN members_consolidated AS m
             ON a.app_pid = m.app_pid
-        CROSS JOIN date_limit
+        CROSS JOIN date_limit AS d
+        WHERE a.app_pid NOT IN (301093, 315478, 314141, 308897)
         ;
     """
 
