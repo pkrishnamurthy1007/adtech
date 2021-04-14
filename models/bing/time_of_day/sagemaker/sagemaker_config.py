@@ -61,7 +61,7 @@ tag = ':latest'
 uri_suffix = 'amazonaws.com'
 processing_repository_uri = f'{account_id}.dkr.ecr.{region}.{uri_suffix}/{ecr_repository + tag}'
 #%%
-%%writefile $DOCKER_PROCESS_CONFIG_DIR/Dockerfile_test
+%%writefile $DOCKER_PROCESS_CONFIG_DIR/Dockerfile-test
 FROM continuumio/anaconda3:latest
 COPY . /app
 RUN pip install -r app/datascience-utils/requirements.txt && \
