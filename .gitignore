@@ -134,3 +134,4 @@ dmypy.json
 
 #MacOS
 *.DS_Store
+models/bing/keyword.zip
