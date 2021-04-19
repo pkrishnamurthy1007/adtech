@@ -123,3 +123,8 @@
   - memoize bid level 		  `N` possible values
   - memoize time slot		    `N` possible vlaues
   - memoize intervals left	`I` possible values
+
+### DMA split
+- daily correlation important
+- want roughly equal revenue
+- conversion rate, ctr, ctv, 
