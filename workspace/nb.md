@@ -128,3 +128,76 @@
 - daily correlation important
 - want roughly equal revenue
 - conversion rate, ctr, ctv, 
+- focus on
+  - how to get taboola location in reporting
+  - associate taboola reporting w/ session revenue reporting
+  - A-A test over past 30 days -> A-A test over past 30 days fitted over 60-30 days
+  - if i want SEO - could try to only use sessoins where referrer == GOOGLE
+    - b/c if referrer == NULL  could have come for somewhere else
+
+### 2021-04-23 standup
+- A/B testing split
+  - reporting:
+    - is `session.creation_date` a good approximation of click date
+    - can multiple sessions come out of 1 click
+
+  - loc
+    - after convo w/ Alexa and @milton
+      - user location not available via taboola tracking params 
+      - encrypted cpc is though ---- which could simplify things
+      - TOD also available
+    - vulnerable to changes in location targetting and possible geoip mismatch 
+    - requires some level of fitting 
+    - still worth looking at if we ever run into a system where bids cant be modified in realtime easily (bing maybe?)
+
+  - on/off
+    - robust against TOD targetting regardless of what happened in past b/c groups will cycle their positions in 5 days - so an even 6 times a month
+    - divided into groups via ((dt - EPOCH) // 2.5) % group_num
+    - then if u want bigger time groupings u can go group_num % (whatever group num u want)
+
+  - loc vs on/off
+    - i mean on/off seems way easier right?
+
+  - evaluation metrics
+    - definitely shouldnt be filtering/smoothing/dealing w/ outliers when computing eval metrics right?
+    - daily correlation vs AA testing?
+      - 
+    - why not rolling (weekly,2-weekly,monthly) correlation?
+    - or rolling (weekly,2-weekly,monthly) AA testing?
+
+    - AA testing daily aggregated kpis vs click level kpis?
+      - AA test where u have 1 observeration per day => what i did
+        - used by @trevor at kayak
+      - AA test where 1 observatoin per conversion => bag method
+        - used by @trevor at wanderoo at rpc estimation
+      - AA tes where 1 oberversion per session => ??? didnt this , 
+        - effect variable is then binary [0,1]
+
+    - is there some kind of metric that would determine the difficulty of running a test off the groups we create
+      - bayesian A/B testing w/ priors 
+      - A/B testing priors, variancae, groups, 
+
+    - AA significance testing vs "negative-power"
+      - positive power gives p(detect real effect | there is a real effect)
+      - negative power gives p(find no effect | there is no effect)
+    
+  - in general
+    - are we going to have an A/B testing table/object?
+      - sagemaker experiemtns/A/B testing afaict cant do this for us
+      - should support creating/running/stopping/deleting/monitoring tests
+      - will it be responsible for making the account structure and deployment changes to run the tests?
+      - or will that happen elsewhere and this is more of a logging/retrospective tool?
+      - could have separate classes for A/B and loc splitting
+
+    - would be nice to have a plugin that provides a standardized interface for all platforms
+      - at least supporting bid modifiers & blocking for  
+        - TOD
+        - loc
+        - device type
+      - then each adapter could provide the extra platform specific functionality like e.g. keyword/publisher targetting for bing/taboola
+
+### Trevor 2021-04-23
+- most granular taboola rerporting
+  - date, hour of day, campaign, publisher, country, region, dma, os, platform, browser, audience, cost, clicks, impressions, viewable_impressions
+  - bag mtd
+  - 
