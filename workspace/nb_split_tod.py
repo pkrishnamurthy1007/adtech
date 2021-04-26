@@ -16,7 +16,7 @@ from ds_utils.db.connectors import HealthcareDW
 NOW = datetime.datetime.now().date()
 DAY = datetime.timedelta(days=1)
 
-start_date = NOW - 60*DAY
+start_date = NOW - 90*DAY
 end_date = NOW - 0*DAY
 date_range = pd.date_range(start_date, end_date)
 
@@ -35,7 +35,7 @@ O65 = 'MEDICARE'
 start_date = start_date_ymd
 end_date = end_date_ymd
 product = O65
-traffic_source = BING
+traffic_source = GOOG
 product_filter = "" if product is None else \
     f"AND UPPER(s.product) = UPPER('{product}')"
 traffic_filter = "" if traffic_source is None else \
@@ -125,6 +125,47 @@ def gpcorr(df1,df2):
 
 gpcorr(df1,df2)
 #%%
+"""
+GOAL:
+- generate splits s.t. we can run A/B tests on kpis under some reasonable timeframe
+    - generate timeframes for various effect sizes
+- analysis
+    1. run power test on traffic data - figure out experiment length for perfect split
+        *NOTE*: define perfect split as having identical kpi behavior for A/A test 
+    2. for range of testing window length and start/end dates
+        - find split effect size in AA test 
+        - assume worst case where split effect works against observed effect 
+"""
+
+dfdtagg = df.sum(level="date")
+mu = dfdtagg.mean()
+std = dfdtagg.std()
+lift_percentages = np.arange(10,100,10)
+normalized_lifts = (lift_percentages / 100).reshape(-1,1) * (mu / std).values.reshape(1,-1)
+normalized_lifts = pd.DataFrame(
+    normalized_lifts,
+    columns=dfdtagg.columns,
+    index=lift_percentages
+) 
+from statsmodels.stats.power import TTestIndPower
+exp_obs = normalized_lifts \
+    .applymap(lambda lift: TTestIndPower().solve_power(effect_size=lift,nobs1=None,alpha=0.05,power=0.9,))
+
+dfgp1 = df[df["test_group"] % 2 == 0].sum(level=["date"])
+dfgp2 = df[df["test_group"] % 2 == 1].sum(level=["date"])
+AAeffects = (dfgp1.rolling(30).mean() - dfgp2.rolling(30).mean()).abs()
+split_delta_mu = AAeffects.mean()
+split_delta_sig = AAeffects.std()
+
+from IPython.display import display as ipydisp
+for i in range(5):
+    aa_normalized_effect = (split_delta_mu + split_delta_sig*i) / std
+    normalized_lifts_worst_case = normalized_lifts - aa_normalized_effect
+    normalized_lifts_worst_case = np.maximum(normalized_lifts_worst_case,0)
+    exp_obs_worst_case = normalized_lifts_worst_case \
+        .applymap(lambda lift: TTestIndPower().solve_power(effect_size=max(lift,1e-10), nobs1=None, alpha=0.05, power=0.9,))
+    obs_added = (exp_obs_worst_case - exp_obs).astype(int)[wkpis]
+    ipydisp(obs_added)
 #%%
 def matnorm_fit_transform_half(X):
     # return X
