@@ -1,6 +1,8 @@
 import sys
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+
 from scipy.interpolate import UnivariateSpline
 from sklearn.base import BaseEstimator, RegressorMixin
 
@@ -278,3 +280,52 @@ class Lowess(BaseEstimator, RegressorMixin):
             robust_weights=None, robust_iters=3, **reg_params):
         self.fit(x, y, frac, reg_anchors, num_fits, external_weights, robust_weights, robust_iters, **reg_params)
         return self.predict(x)
+
+
+def get_lowess_spline(df, timezone_field, revenue_field, show_plots=False):
+    df = calculate_bag_rps(df, 'user_ts', 'revenue').copy()
+
+    if 'weekday' not in df.columns or 'hourofday' not in df.columns or 'hourfraction' not in df.columns:
+        print("`weekday`, `hourofday` and `hourfraction` fields are needed.")
+        return None
+
+    grouped_df = split_to_intervals(df, 'weekday', 'hourofday', 'hourfraction', 'bag_rps', 'bag_conversion_rate')
+
+    quants = grouped_df['bag_rps'].quantile([.99])
+    grouped_df.loc[grouped_df['bag_rps'] > quants[.99], 'bag_rps'] = quants[.99]
+    grouped_df['dayhour'] = grouped_df['weekday'].astype(str) + (grouped_df['hourofday'] + grouped_df['hourfraction']).astype(str)
+    grouped_df['mean_rps'] = grouped_df['bag_rps'].mean()
+    grouped_df['mean_sessions'] = grouped_df['sessions'].mean()
+
+    lowess = Lowess()
+    y_pred = lowess.fit_predict(grouped_df['ix'].values, grouped_df['bag_rps'].values, frac=0.03, max_std_dev=5)
+
+    if show_plots:
+        plt.figure(figsize=(15,5))
+        plt.scatter(grouped_df['ix'], grouped_df['bag_rps'], label='Original RPS', zorder=2)
+        plt.plot(grouped_df['ix'], y_pred, '--', label='Robust LOWESS', color='k', zorder=3)
+        plt.plot(grouped_df['ix'], grouped_df['mean_rps'], label='Mean RPS', color='yellow')
+        plt.legend(frameon=True)
+        plt.show()
+    
+    lowess = Lowess()
+    session_pred = lowess.fit_predict(grouped_df['ix'].values, grouped_df['sessions'].values, frac=0.03)
+
+    if show_plots:
+        plt.figure(figsize=(15,5))
+        plt.scatter(grouped_df['ix'], grouped_df['sessions'], label='Original session count', zorder=2)
+        plt.plot(grouped_df['ix'], session_pred, '--', label='Robust LOWESS', color='k', zorder=3)
+        plt.plot(grouped_df['ix'], grouped_df['mean_sessions'], label='Mean session count', color='yellow')
+        plt.legend(frameon=True)
+        plt.show()
+    
+    norm_revenue_mean = (y_pred * session_pred).sum() / session_pred.sum()
+    
+    if show_plots:
+        plt.figure(figsize=(15,5))
+        plt.plot(grouped_df['ix'], y_pred, label='Robust LOWESS', color='k', zorder=3)
+        plt.plot(grouped_df['ix'], [norm_revenue_mean] * len(y_pred), label='Mean', color='yellow')
+        plt.legend(frameon=True)
+        plt.show()
+    
+    return y_pred, norm_revenue_mean
