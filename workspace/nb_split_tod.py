@@ -16,7 +16,7 @@ from ds_utils.db.connectors import HealthcareDW
 NOW = datetime.datetime.now().date()
 DAY = datetime.timedelta(days=1)
 
-start_date = NOW - 90*DAY
+start_date = NOW - 180*DAY
 end_date = NOW - 0*DAY
 date_range = pd.date_range(start_date, end_date)
 
@@ -35,7 +35,7 @@ O65 = 'MEDICARE'
 start_date = start_date_ymd
 end_date = end_date_ymd
 product = O65
-traffic_source = GOOG
+traffic_source = TABOOLA
 product_filter = "" if product is None else \
     f"AND UPPER(s.product) = UPPER('{product}')"
 traffic_filter = "" if traffic_source is None else \
@@ -51,10 +51,10 @@ timeofday_query = f"""
             {traffic_filter}
             GROUP BY 1
         ),
-        rps_tz_adj as (
+        rps_detail as (
             SELECT
                 s.*,
-                s.creation_date                                         AS utc_ts,
+                s.creation_date     AS utc_ts,
                 r.revenue
             FROM 
                 tracking.session_detail AS s
@@ -77,11 +77,81 @@ timeofday_query = f"""
         SUM((revenue>0)::int)                   as leads_num,
         SUM(revenue)                            as rev_sum,
         AVG(revenue)                            as rev_avg,
-        STDDEV(revenue)                         as rev_std
-    FROM rps_tz_adj
+        STDDEV(revenue)                         as rev_std        
+    FROM rps_detail r
     GROUP BY 
         date,hour
 """
+
+bag_kpis_by_tod_sql = f"""
+    with
+        rps as (
+            SELECT
+                session_id,
+                sum(revenue) AS revenue
+            FROM tron.session_revenue s
+            WHERE session_creation_date::DATE BETWEEN '{start_date}' AND '{end_date}'
+            {traffic_filter}
+            GROUP BY 1
+        ),
+        session_rps as (
+            SELECT
+                s.*,
+                s.creation_date     AS creation_ts_utc,
+                r.revenue
+            FROM
+                tracking.session_detail AS s
+                JOIN rps as r
+                    ON s.session_id = r.session_id
+            WHERE s.creation_date::DATE BETWEEN '{start_date}' AND '{end_date}'
+            {product_filter}
+            {traffic_filter}
+        ),
+        session_cum_conv as (
+            SELECT
+                *,
+                SUM((revenue>0)::INT) OVER (
+                    ORDER BY creation_ts_utc
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND
+                                    CURRENT ROW)    as conversions_cum
+            FROM session_rps        
+        ), 
+        bag_rps as (
+            SELECT
+                *,
+                conversions_cum                                                     as bag_id,
+                COUNT(*) OVER (PARTITION BY conversions_cum)                        as bag_len,        
+                SUM((revenue>0)::INT) OVER (PARTITION BY conversions_cum)           as bag_conv,
+                AVG((revenue>0)::INT::float) OVER (PARTITION BY conversions_cum)    as bag_lpc,
+                SUM(revenue) OVER (PARTITION BY conversions_cum)                    as bag_rpl,
+                AVG(revenue) OVER (PARTITION BY conversions_cum)                    as bag_rpc
+            FROM session_cum_conv
+        )
+    SELECT
+        creation_ts_utc::date                   as date,
+        date_part(HOUR, creation_ts_utc) +
+        CASE 
+            WHEN date_part(MINUTE, creation_ts_utc)::INT BETWEEN 0 AND 14 THEN 0.0
+            WHEN date_part(MINUTE, creation_ts_utc)::INT BETWEEN 15 AND 29 THEN 0.25
+            WHEN date_part(MINUTE, creation_ts_utc)::INT BETWEEN 30 AND 44 THEN 0.5
+            WHEN date_part(MINUTE, creation_ts_utc)::INT BETWEEN 45 AND 59 THEN 0.75
+        END                                     as hour,
+        COUNT(*)                                as clicks_num,
+        SUM(bag_lpc)                            as leads_num,
+        SUM(bag_rpc)                            as rev_sum,
+        AVG(bag_rpc)                            as rev_avg        
+    FROM bag_rps
+    GROUP BY 
+        date,hour
+"""
+""" our version is PG 8 - range queries w/ definite bounds not supported 
+    until PG 11
+SUM((r.revenue>0)::INT) OVER (
+            ORDER BY r.creation_ts_utc 
+            RANGE BETWEEN '10 days'::INTERVAL PRECEDING AND
+                            CURRENT ROW)    as conversions_past_day
+"""
+
 """
 ctr = clicks/impressions
 lead/click = (rev > 0) / clicks
@@ -90,7 +160,7 @@ rev/click = rev / clicks
 """
 
 with HealthcareDW() as db:
-    df = db.to_df(timeofday_query)
+    df = db.to_df(bag_kpis_by_tod_sql)
 
 df["lpc"] = df["leads_num"] / df["clicks_num"]
 df["rpl"] = df["rev_sum"] / df["leads_num"]
@@ -108,7 +178,7 @@ TEST_HR_INT = 2.25
 N_GROUPS = 4
 df['test_group'] = (df["abs_hrs"] // 2.5) % N_GROUPS
 df = df.set_index("date")
-#%%
+
 df1 = df[df["test_group"] % 2 == 0].sum(level=["date"])
 df2 = df[df["test_group"] % 2 == 1].sum(level=["date"])
 
@@ -137,6 +207,8 @@ GOAL:
         - assume worst case where split effect works against observed effect 
 """
 
+from IPython.display import display as ipydisp
+
 dfdtagg = df.sum(level="date")
 mu = dfdtagg.mean()
 std = dfdtagg.std()
@@ -150,6 +222,7 @@ normalized_lifts = pd.DataFrame(
 from statsmodels.stats.power import TTestIndPower
 exp_obs = normalized_lifts \
     .applymap(lambda lift: TTestIndPower().solve_power(effect_size=lift,nobs1=None,alpha=0.05,power=0.9,))
+ipydisp(exp_obs[wkpis].astype(int))
 
 dfgp1 = df[df["test_group"] % 2 == 0].sum(level=["date"])
 dfgp2 = df[df["test_group"] % 2 == 1].sum(level=["date"])
@@ -157,15 +230,13 @@ AAeffects = (dfgp1.rolling(30).mean() - dfgp2.rolling(30).mean()).abs()
 split_delta_mu = AAeffects.mean()
 split_delta_sig = AAeffects.std()
 
-from IPython.display import display as ipydisp
-for i in range(5):
+for i in range(3):
     aa_normalized_effect = (split_delta_mu + split_delta_sig*i) / std
     normalized_lifts_worst_case = normalized_lifts - aa_normalized_effect
-    normalized_lifts_worst_case = np.maximum(normalized_lifts_worst_case,0)
     exp_obs_worst_case = normalized_lifts_worst_case \
         .applymap(lambda lift: TTestIndPower().solve_power(effect_size=max(lift,1e-10), nobs1=None, alpha=0.05, power=0.9,))
-    obs_added = (exp_obs_worst_case - exp_obs).astype(int)[wkpis]
-    ipydisp(obs_added)
+    obs_added = (exp_obs_worst_case - exp_obs).astype(int)
+    ipydisp(obs_added[wkpis])
 #%%
 def matnorm_fit_transform_half(X):
     # return X

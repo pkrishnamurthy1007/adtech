@@ -200,4 +200,13 @@
 - most granular taboola rerporting
   - date, hour of day, campaign, publisher, country, region, dma, os, platform, browser, audience, cost, clicks, impressions, viewable_impressions
   - bag mtd
-  - 
+
+
+### Dan 2021-04-27
+- params
+  - click thresh
+  - roi_target
+  - daily change/day
+- automating the different param runs
+- automating curtis checks
+  - get @curtis on the horn 
