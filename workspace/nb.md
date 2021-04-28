@@ -210,3 +210,17 @@
 - automating the different param runs
 - automating curtis checks
   - get @curtis on the horn 
+
+### Dan/David 2021-04-28
+- high level overview of how geo-granular bidding different than regular bid modifieres
+- whats curtis's process for verifying bids
+  - ask @curtis
+  - what ideas does he have going forward
+- want to consider kws like Obamacare-Californa and Obamacare-Wisconsin to be considered the same
+  - Q: is curtis writign these keywords? - does bing prefine them? - is there a list of keywords somewhere?
+    - TODO: ask @curtis
+- TODO: exclude Geo-granular campaigns from regular bids and vice versa
+- TODO: use more broad search?
+- TODO: how loose is "exact match" - ask curtis
+  - sep kws into different intents - how done?
+- 

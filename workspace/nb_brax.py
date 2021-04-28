@@ -1,10 +1,10 @@
 #%%
 import requests
 import base64
-
+import os
 BRAX_URI = "https://api.brax.io/v1"
-USER = "aduriseti@healthcare.com"
-PSWD = "Navidad@1996"
+USER = os.getenv("BRAX_USER")
+PSWD = os.getenv("BRAX_PSWD")
 TOK = base64.b64encode(f"{USER}:{PSWD}".encode("ascii")).decode()
 BRAX_KWARGS = {
     "headers": {

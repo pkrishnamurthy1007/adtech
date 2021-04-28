@@ -1,5 +1,4 @@
 #%%
-from workspace.nb_taboola import EFFECT_COL
 import numpy as np
 import jmespath
 from pytaboola.services.report import \
