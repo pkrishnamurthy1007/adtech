@@ -1,15 +1,17 @@
-name: bing-bidder-ghaction
+name: bing-update-bids-keyword
 
 on:
   push:
-    branches: [ sm_cicd ]
+    branches: [ workspace_amal ]
+    paths:
+      - models/bing/keywords/**
+      - .github/workflows/bing_update_bid_keyword.yml
   schedule:
   - cron: "0 0 * * *"
-
   workflow_dispatch:
 
 jobs:
-  update-base-keyword-bids:
+  update-keyword-bids:
     runs-on: ubuntu-latest
 
     steps:
