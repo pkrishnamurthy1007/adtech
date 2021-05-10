@@ -16,7 +16,7 @@ from ds_utils.db.connectors import HealthcareDW
 NOW = datetime.datetime.now().date()
 DAY = datetime.timedelta(days=1)
 
-start_date = NOW - 180*DAY
+start_date = NOW - 90*DAY
 end_date = NOW - 0*DAY
 date_range = pd.date_range(start_date, end_date)
 
@@ -224,12 +224,23 @@ exp_obs = normalized_lifts \
     .applymap(lambda lift: TTestIndPower().solve_power(effect_size=lift,nobs1=None,alpha=0.05,power=0.9,))
 ipydisp(exp_obs[wkpis].astype(int))
 
+#%%
+df
+#%%
 dfgp1 = df[df["test_group"] % 2 == 0].sum(level=["date"])
 dfgp2 = df[df["test_group"] % 2 == 1].sum(level=["date"])
+#%%
+dfgp1
+#%%
 AAeffects = (dfgp1.rolling(30).mean() - dfgp2.rolling(30).mean()).abs()
+#%%
+AAeffects
+#%%
 split_delta_mu = AAeffects.mean()
 split_delta_sig = AAeffects.std()
-
+#%%
+split_delta_sig
+#%%
 for i in range(3):
     aa_normalized_effect = (split_delta_mu + split_delta_sig*i) / std
     normalized_lifts_worst_case = normalized_lifts - aa_normalized_effect

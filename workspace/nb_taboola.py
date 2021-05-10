@@ -41,6 +41,10 @@ for aid,a in tqdm.tqdm(id2accnt.items()):
 
 import json
 json.dump(aid2cid2camp, open("camps.json", "w"))
+O65_camps = accnt_camps(id2accnt[O65_ACCNT_ID])
+len(O65_camps)
+#%%
+aid2cid2camp
 #%%
 import itertools
 cross = itertools.product
