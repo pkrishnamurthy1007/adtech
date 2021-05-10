@@ -1,2 +1,2 @@
 import sys
-sys.exit(2)
+sys.exit(1)
