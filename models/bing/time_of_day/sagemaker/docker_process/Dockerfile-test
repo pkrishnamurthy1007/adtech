@@ -1,6 +1,0 @@
-FROM continuumio/anaconda3:latest
-COPY . /app
-RUN pip install -r app/datascience-utils/requirements.txt && \
-    pip install app/datascience-utils
-ENV PYTHONUNBUFFERED=TRUE
-ENTRYPOINT ["python3","app/tod_dp.py"]

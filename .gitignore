@@ -1,4 +1,7 @@
 notebooks/local_ignored/*
+*-Copy*
+*.csv
+*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
