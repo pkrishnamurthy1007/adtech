@@ -4,7 +4,7 @@ on:
   push:
     branches: [ workspace_amal ]
     paths:
-      - models/bing/keywords/**
+      - models/bing/time_of_day/**
       - .github/workflows/bing_update_bids_tod.yml
   schedule:
   - cron: "0 0 * * *"

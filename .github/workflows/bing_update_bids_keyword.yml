@@ -5,7 +5,7 @@ on:
     branches: [ workspace_amal ]
     paths:
       - models/bing/keywords/**
-      - .github/workflows/bing_update_bid_keyword.yml
+      - .github/workflows/bing_update_bids_keyword.yml
   schedule:
   - cron: "0 0 * * *"
   workflow_dispatch:
@@ -27,34 +27,35 @@ jobs:
       - name: Activate conda env from .yml
         uses: conda-incubator/setup-miniconda@v2
         with:
-          environment-file: conda-data-science-bing.yml
+          environment-file: models/bing/keywords/conda-data-science-bing.yml
 
       - name: Install pip packages
         run: |
           echo "${GIT_SSH_KEY}\n" > GIT_SSH_PTH
           chmod 600 GIT_SSH_PTH
-          GIT_SSH_COMMAND="ssh -i GIT_SSH_PTH" pip install -r ${GITHUB_WORKSPACE}/requirements.txt
+          GIT_SSH_COMMAND="ssh -i GIT_SSH_PTH" \
+            pip install -r ${GITHUB_WORKSPACE}/models/bing/keywords/requirements.txt
         env:
           GIT_SSH_KEY: ${{ secrets.GIT_SSH_KEY }}
 
       - name: Compute updated bids
         id: compute
         run: |
-          python ${GITHUB_WORKSPACE}/compute_keyword_bid_updates.py || exit_code=$?
+          python ${GITHUB_WORKSPACE}/models/bing/keywords/compute_keyword_bid_updates.py || exit_code=$?
           echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
           exit $exit_code
 
       - name: Check updated bids
         id: check
         run: |
-          python ${GITHUB_WORKSPACE}/check_keyword_bid_updates.py || exit_code=$?
+          python ${GITHUB_WORKSPACE}/models/bing/keywords/check_keyword_bid_updates.py || exit_code=$?
           echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
           exit $exit_code
           
       - name: Apply updated bids
         id: apply
         run: |
-          python ${GITHUB_WORKSPACE}/apply_keyword_bid_updates.py || exit_code=$?
+          python ${GITHUB_WORKSPACE}/models/bing/keywords/apply_keyword_bid_updates.py || exit_code=$?
           echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
           exit $exit_code
       
