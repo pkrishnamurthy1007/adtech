@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SLACK_CHANNEL: alert-test
-      CHANNEL_SID: !channel
-      AMAL_SID: @U01PPS0BLKY
-      CURTIS_SID: @U01MYTF7X18
-      DAN_SID: @U01R2UV56Q1 
+      CHANNEL_SID: '!channel'
+      AMAL_SID: '@U01PPS0BLKY'
+      CURTIS_SID: '@U01MYTF7X18'
+      DAN_SID: '@U01R2UV56Q1' 
 
     steps:
       - uses: actions/checkout@v2
