@@ -272,3 +272,7 @@ src/sagify_base/build.sh  src src src/sagify_base/Dockerfile requirements.txt la
 
 ### standup 2021-05-07
 - geo-granular kw bids vary accross location w/ same geo-granular kw
+
+### standup 2021-05-10
+---- 
+
