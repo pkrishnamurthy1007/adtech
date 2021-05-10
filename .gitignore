@@ -3,6 +3,9 @@ notebooks/local_ignored/*
 *.csv
 *.json
 
+# My (Amals) general pattern for notebook files:
+nb\.*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
