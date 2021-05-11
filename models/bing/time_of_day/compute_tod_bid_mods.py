@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import datetime
 from ds_utils.db.connectors import HealthcareDW
-from models.data.queries.time_of_day import hc_quarter_hour_tz_adjusted
+from models.data.queries.time_of_day import hc_session_conversions,hc_15m_user_tz
 from models.utils import *
 
 def add_spline(df, index_col, smooth_col, spline_k, spline_s, suffix='_spline'):
@@ -17,40 +17,54 @@ def add_spline(df, index_col, smooth_col, spline_k, spline_s, suffix='_spline'):
     df.set_index(index_col, inplace=True)
     df[smooth_col + suffix] = spline(df.index)
     return df
+
+def cema_transform(y,show_plots=False,window=16):
+    if show_plots:raise NotImplementedError
+    y = spread_outliers(y)
+    y_cema = cma(ema(y, window), window)
+    return y_cema
+
+from models.utils.time_of_day import Lowess
+def lowess_transform(y, show_plots=False, frac=0.03, max_std_dev=5):
+    if show_plots: raise NotImplementedError
+    y = spread_outliers(y)
+    y_lowess = Lowess().fit_predict(np.arange(len(y)), y.values, frac=frac, max_std_dev=max_std_dev)
+    return y_lowess
+
+def add_modifiers(df, target_field, weight_field, transform_fn, fit_kwargs={}, show_plots=False):
+    if show_plots: raise NotImplementedError
+    weight = df[weight_field]
+    target = df[target_field]
+    weight_transform = transform_fn(weight,show_plots=False,**fit_kwargs)
+    target_transform = transform_fn(target,show_plots=False,**fit_kwargs)
     
-def compute_cema_tod_modifiers(df_tz_adj, window=16):
-    rps = df_tz_adj["rps"]
-    rps = spread_outliers(rps)
+    # target_wavg = (target_transform * weight_transform).sum() / weight_transform.sum()
+    target_wavg = target.mean() 
+    target_mod = target_transform / target_wavg
+    target_mod = target_mod * 20 // 1 / 20  # set to incs of 0.05
+    df["baseline"] = 1
+    df[f"{weight_field}_{transform_fn.__name__}"] = weight_transform
+    df[f"{target_field}_{transform_fn.__name__}"] = target_transform
+    df[f"{target_field}_{transform_fn.__name__}_mean"] = target_wavg
+    df[f"{target_field}_{transform_fn.__name__}_modifier"] = target_mod
+    return df
 
-    df_tz_adj["rps_cema"] = cma(ema(rps, window), window)
-    df_tz_adj["sessions_cema"] = cma(
-        ema(df_tz_adj["sessions"], window), window)
-
-    df_tz_adj['baseline'] = 1
-    rps_cema_mean = (df_tz_adj["sessions_cema"] * df_tz_adj['rps_cema']).sum() \
-        / df_tz_adj["sessions_cema"].sum()
-    df_tz_adj["rps_cema_mean"] = rps_cema_mean
-    df_tz_adj['cema_modifier'] = df_tz_adj['rps_cema'] / rps_cema_mean
-    df_tz_adj['cema_modifier'] = df_tz_adj['cema_modifier'] * \
-        20 // 1 / 20  # set to incs of 0.05
-
-    return df_tz_adj
-
-def get_interval_modifier_table(product):
-    df_tz_adj = hc_quarter_hour_tz_adjusted(
-        start_date=start_date_ymd, end_date=end_date_ymd, product=product, traffic_source=BING)
-    df_tz_adj = compute_cema_tod_modifiers(df_tz_adj, window)
-    df_tz_adj = df_tz_adj.reset_index().set_index("dayofweek")
+def get_interval_modifier_table(df,modifier_field,weight_field,show_plots=False):
+    df = df.copy()
+    df = df.reset_index().set_index("dayofweek")
     modifier_rows = []
     for day in range(7):
-        X = df_tz_adj.loc[day, "cema_modifier"].values
-        W = df_tz_adj.loc[day, "sessions_cema"].values
+        X = df.loc[day, modifier_field].values
+        W = df.loc[day, weight_field].values
 
-        _, interval_bounds = interval_fit(
-            X, W, BING_DAILY_INTERVALS, wavgapprox)
+        interval_bounds,eps = \
+            interval_fit(X, W, nintervals=BING_DAILY_INTERVALS, xapprox=wavgapprox)
+        Xapprox = interval_transform(
+            X, W, BING_DAILY_INTERVALS, wavgapprox, interval_bounds)
+        df.loc[day, f"{modifier_field}_interval"] = Xapprox
+
         interval_bounds = [0, *interval_bounds]
-        interval_hr_bounds = df_tz_adj.loc[day,
-                                           "hourofday"].iloc[interval_bounds[:-1]]
+        interval_hr_bounds = df.loc[day,"hourofday"].iloc[interval_bounds[:-1]]
         interval_hr_bounds = [*interval_hr_bounds, 24]
         intervals = [*zip(interval_hr_bounds[:-1], interval_hr_bounds[1:])]
         interval_modifiers = [wavgapprox(X, W, lb, ub) for lb, ub in zip(
@@ -64,9 +78,47 @@ def get_interval_modifier_table(product):
             "hr_end_exclusive": end_hr,
             "modifier": mod
         } for (start_hr, end_hr), mod in zip(intervals, interval_modifiers)]
+    
+    if show_plots:
+        df[f"{weight_field}_mean_adjusted"] = df[weight_field] / df[weight_field].mean()
+        # TODO: allow selecting scatter field somehow
+        rps = spread_outliers(df["rps"])
+        # decided not to use a weighted average to adjust rps
+        # rps_mean = (rps * df[weight_field]).sum() / df[weight_field].sum()
+        rps_mean = rps.mean()
+        df["rps_mean_adjusted"] = rps / rps_mean
+        ax = df.reset_index().plot.scatter(x='int_ix', y='rps_mean_adjusted',label="rps_mean_adjusted")
+        df \
+            .reset_index().set_index("int_ix") \
+            [[f"{weight_field}_mean_adjusted", "baseline", modifier_field, f"{modifier_field}_interval"]]\
+            .plot(ax=ax, figsize=(15, 5))
+        ax.legend()
+        # ax.set_title(f"Bid modifiers for product={product}")
+    
     return pd.DataFrame(modifier_rows)
 
+def upload_interval_modifier_table(modifier_df):
+    SCHEMA = "data_science"
+    BING_TOD_MODIFIER_TABLE = "tod_modifiers"
+    table_creation_sql = f"""
+        CREATE TABLE IF NOT EXISTS 
+        {SCHEMA}.{BING_TOD_MODIFIER_TABLE}
+        (
+            "product" VARCHAR(50),
+            "traffic_source" VARCHAR(50),
+            "weekday_index" INT,
+            "weekday" VARCHAR(50),
+            "hr_start_inclusive" FLOAT,
+            "hr_end_exclusive" FLOAT,
+            "modifier" FLOAT,
+            "calculation_date" DATETIME
+        );
+    """
 
+    with HealthcareDW() as db:
+        db.exec(table_creation_sql)
+        db.load_df(modifier_df, schema=SCHEMA,
+                table=BING_TOD_MODIFIER_TABLE)
 #%%
 TABOOLA = "TABOOLA"
 MEDIA_ALPHA = "MEDIAALPHA"
@@ -78,88 +130,35 @@ BING_DAILY_INTERVALS = 7
 NOW = datetime.datetime.now()
 DAY = datetime.timedelta(days=1)
 
-start_date = NOW - 90*DAY
+MONTHS = 5
+start_date = NOW - MONTHS*30*DAY
 end_date = NOW - 0*DAY
 window = 16
 
 start_date_ymd = start_date.strftime("%Y%m%d")
 end_date_ymd = end_date.strftime("%Y%m%d")
 
-bing_modifiers = pd.concat((
-    get_interval_modifier_table(U65),
-    get_interval_modifier_table(O65)
-))
+product = O65
+traffic_source = BING
+for traffic_source in [BING]:
+    for product in [U65,O65]:
+        df_15m = hc_15m_user_tz(
+            start_date=start_date_ymd, end_date=end_date_ymd,
+            product=product, traffic_source=traffic_source)
 
-bing_modifiers["calculation_date"] = NOW
+        # # CEMA
+        # df_15m = add_modifiers(df_15m,"rps","sessions",cema_transform)
+        # modifiers_df = get_interval_modifier_table(df_15m, "rps_cema_transform_modifier", "sessions_cema_transform",show_plots=True)
+        # LOWESS <- hits peaks a little better
+        df_15m = add_modifiers(df_15m,"rps","sessions",lowess_transform)
+        modifier_df = get_interval_modifier_table(df_15m, "rps_lowess_transform_modifier", "sessions_lowess_transform",show_plots=True)
+        modifier_df["calculation_date"] = NOW
+        modifier_df["product"] = product
+        modifier_df["traffic_source"] = traffic_source
 
-SCHEMA = "data_science"
-BING_TOD_MODIFIER_TABLE = "bing_tod_modifiers"
-table_creation_sql = f"""
-    CREATE TABLE IF NOT EXISTS 
-    {SCHEMA}.{BING_TOD_MODIFIER_TABLE}
-    (
-        "product" VARCHAR(50),
-        "weekday_index" INT,
-        "weekday" VARCHAR(50),
-        "hr_start_inclusive" FLOAT,
-        "hr_end_exclusive" FLOAT,
-        "modifier" FLOAT,
-        "calculation_date" DATETIME
-    );
-"""
-
-with HealthcareDW() as db:
-    db.exec(table_creation_sql)
-    db.load_df(bing_modifiers, schema=SCHEMA,
-                table=BING_TOD_MODIFIER_TABLE)
-
-def fit_eval_modfifiers(product):
-    df_tz_adj = hc_quarter_hour_tz_adjusted(
-        start_date=start_date_ymd, end_date=end_date_ymd, product=product, traffic_source=BING)
-    df_tz_adj = compute_cema_tod_modifiers(df_tz_adj, window)
-    df_tz_adj = df_tz_adj.reset_index().set_index("dayofweek")
-    df_tz_adj["cema_modifier_interval"] = np.NaN
-    for day in range(7):
-        X = df_tz_adj.loc[day, "cema_modifier"].values
-        W = df_tz_adj.loc[day, "sessions_cema"].values
-        Xapprox = interval_fit_transform(
-            X, W, BING_DAILY_INTERVALS, wavgapprox)
-        df_tz_adj.loc[day, "cema_modifier_interval"] = Xapprox
-
-    df_tz_adj["sessions_cema_mean_adjusted"] = \
-        df_tz_adj["sessions_cema"] / df_tz_adj["sessions_cema"].mean()
-    rps_mean = (df_tz_adj["rps"] * df_tz_adj["sessions"]
-                ).sum() / df_tz_adj["sessions"].sum()
-    df_tz_adj["rps_mean_adjusted"] = spread_outliers(
-        df_tz_adj["rps"]) / rps_mean
-    ax = df_tz_adj.reset_index().plot.scatter(x='int_ix', y='rps_mean_adjusted')
-    df_tz_adj.reset_index().set_index("int_ix")[["sessions_cema_mean_adjusted", "baseline", "cema_modifier", "cema_modifier_interval"]].plot(
-        ax=ax, figsize=(15, 5))
-    ax.set_title(f"Bid modifiers for product={product}")
-
-    return df_tz_adj
-
-fit_eval_modfifiers(U65)
-fit_eval_modfifiers(O65)
+        upload_interval_modifier_table(modifier_df)
 #%%
-# #%%
-# interval_fit(X,W,DAILY_INTERVALS,wavgapprox)
-# df = pd.DataFrame(data=mem.values(),index=pd.MultiIndex.from_tuples(mem.keys()))
-# df.loc[(slice(None),1),:]
-# #%%
-# for day in range(7):
-#     ax = plt.gca()
-#     df_tz_adj.loc[day] \
-#         .reset_index().set_index("hourofday") \
-#         ["cema_modifier_interval"]\
-#         .plot(ax=ax, figsize=(15, 5))
-# plt.show()
-# #%%
-# day = 5
-# df_tz_adj.loc[day] \
-#         .reset_index().set_index("hourofday") \
-#         [["cema_modifier_interval", "cema_modifier", "sessions_cema_mean_adjusted"]]\
-#         .plot(figsize=(15, 5))
-
-
-#%%
+# TODO: automate regression checks
+# ax = df_15m.plot.scatter(x="int_ix",y="sessions")
+# df_15m[["sessions_lowess_transform"]].plot(ax=ax,figsize=(15,5))
+# %%

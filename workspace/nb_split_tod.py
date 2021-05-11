@@ -101,7 +101,7 @@ bag_kpis_by_tod_sql = f"""
                 r.revenue
             FROM
                 tracking.session_detail AS s
-                JOIN rps as r
+                INNER JOIN rps as r
                     ON s.session_id = r.session_id
             WHERE s.creation_date::DATE BETWEEN '{start_date}' AND '{end_date}'
             {product_filter}

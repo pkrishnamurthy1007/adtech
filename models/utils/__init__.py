@@ -4,7 +4,6 @@ import typing
 def spread_outliers(S, percentile=97.5) -> typing.Iterable:
     OUTTHRESH = np.percentile(S, percentile)
     OUTI = S > OUTTHRESH
-    # print("outlier thresh:", OUTTHRESH)
     T = OUTI * OUTTHRESH + (1-OUTI) * S
     T = (S.sum() / T.sum()) * T
     assert abs(T.sum() - S.sum()) < 1e-10
@@ -38,7 +37,7 @@ def midapprox(X, W, l, r):
     return X[(l+r)//2]
 def wavgapprox(X, W, l, r):
     return wavg(X[l:r], W[l:r])
-def interval_fit(X, W, nintervals, xapprox) -> typing.Tuple[float, typing.List[int]]:
+def interval_fit(X, W, nintervals, xapprox) -> typing.Tuple[typing.List[int],float]:
     """
     PREMISE:
         define subset of X,W w/ leftmost bound of l
@@ -66,15 +65,16 @@ def interval_fit(X, W, nintervals, xapprox) -> typing.Tuple[float, typing.List[i
                     eps_suffix, int_suffix = dp[r, k+1]
                     yield interval_eps.sum() + eps_suffix, [r] + int_suffix
             dp[l, k] = min(yield_suffix_fits())
-    return dp[0, 0]
+    eps,interval_bounds = dp[0, 0]
+    return interval_bounds,eps
 
-
-def interval_fit_transform(X, W, nintervals, xapprox):
-    Xapprox = np.zeros(len(X))
-    eps, interval_bounds, *_ = interval_fit(X, W, nintervals, xapprox)
-    # assert len(interval_bounds) <= nintervals, (nintervals,interval_bounds)
+def interval_transform(X,W,nintervals,xapprox,interval_bounds,*_):
     assert len({*interval_bounds}) == nintervals
     interval_bounds = [0, *interval_bounds]
+    Xapprox = np.zeros(len(X))
     for lb, ub in zip(interval_bounds[:-1], interval_bounds[1:]):
         Xapprox[lb:ub] = xapprox(X, W, lb, ub)
     return Xapprox
+
+def interval_fit_transform(X, W, nintervals, xapprox):
+    return interval_transform(X,W,nintervals,xapprox,*interval_fit(X, W, nintervals, xapprox))
