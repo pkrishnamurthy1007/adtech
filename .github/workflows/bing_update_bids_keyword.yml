@@ -47,7 +47,6 @@ jobs:
       - name: Compute updated bids
         id: compute
         run: |
-          exit 0
           python ${GITHUB_WORKSPACE}/models/bing/keywords/compute_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
           echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
