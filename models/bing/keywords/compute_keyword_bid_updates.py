@@ -15,6 +15,8 @@ import boto3
 #import bingads
 
 #### LOAD COMMON ####
+import sys
+sys.path.insert(0,"../../../")
 from models.bing.keywords.common import * 
 
 import sys; sys.exit(-2)

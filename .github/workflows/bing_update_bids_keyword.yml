@@ -48,7 +48,10 @@ jobs:
         id: compute
         run: |
           cd $GITHUB_WORKSPACE
-          python models/bing/keywords/compute_keyword_bid_updates.py; exit_code=$?
+          ls . 
+          pwd
+          python models/bing/keywords/compute_keyword_bid_updates.py \
+            && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code ))
           echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
           exit $(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
@@ -75,7 +78,7 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         if: always() && steps.compute.outputs.exit_code != 0
         env:
-          SLACK_CHANNEL: alert-test
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
           SLACK_MESSAGE: <${{ env.AMAL_SID }}> Error computing bid updates.
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.compute.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
