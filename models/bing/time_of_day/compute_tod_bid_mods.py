@@ -1,6 +1,5 @@
 #%%
-import sys
-sys.path.insert(0,"../../../")
+from models.bing.time_of_day.common import *
 from scipy.interpolate import UnivariateSpline
 import typing
 import numpy as np

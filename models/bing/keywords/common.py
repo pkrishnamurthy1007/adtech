@@ -18,6 +18,6 @@ os.environ.update({**sm_env_base, **os.environ})
 #%%
 S3_OUTPUT_BUCKET = "hc-data-lake-storage"
 S3_OUTPUT_PREFIX = "prod/data-science/bing-keyword-bids"
-BIDS_DIR = rscfn(__name__, "BID_DUMPS")
-os.makedirs(BIDS_DIR, exist_ok=True)
+OUTPUT_DIR = rscfn(__name__, "OUTPUT")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 #%%

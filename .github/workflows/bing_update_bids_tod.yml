@@ -47,33 +47,42 @@ jobs:
       - name: Compute updated bids
         id: compute
         run: |
-          python ${GITHUB_WORKSPACE}/models/bing/time_of_day/compute_tod_bid_mods.py \
+          cd ${GITHUB_WORKSPACE}
+          python models/bing/time_of_day/compute_tod_bid_mods.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
-          echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
-          exit $(( $exit_code > 0 ? $exit_code-1 : 0)) # allow exit_code=1 as warning
+          pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
+          relu_exit_code =$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
+          echo "::set-output name=exit_code::$pos_exit_code" # https://stackoverflow.com/questions/60453924
+          exit $relu_exit_code
 
       - name: Check updated bids
         id: check
         run: |
-          python ${GITHUB_WORKSPACE}/models/bing/time_of_day/check_tod_bid_mods.py \
+          cd ${GITHUB_WORKSPACE}
+          python models/bing/time_of_day/check_tod_bid_mods.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
-          echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
-          exit $(( $exit_code > 0 ? $exit_code-1 : 0)) # allow exit_code=1 as warning
+          pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
+          relu_exit_code =$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
+          echo "::set-output name=exit_code::$pos_exit_code" # https://stackoverflow.com/questions/60453924
+          exit $relu_exit_code
           
       - name: Apply updated bids
         id: apply
         run: |
-          python ${GITHUB_WORKSPACE}/models/bing/time_of_day/apply_tod_bid_mods.py \
+          cd ${GITHUB_WORKSPACE}
+          python models/bing/time_of_day/apply_tod_bid_mods.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
-          echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
-          exit $(( $exit_code > 0 ? $exit_code-1 : 0)) # allow exit_code=1 as warning
+          pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
+          relu_exit_code =$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
+          echo "::set-output name=exit_code::$pos_exit_code" # https://stackoverflow.com/questions/60453924
+          exit $relu_exit_code
       
       - name: Compute failure notification
         uses: rtCamp/action-slack-notify@v2
         if: always() && steps.compute.outputs.exit_code > 0
         env:
-          SLACK_CHANNEL: alert-test
-          SLACK_MESSAGE: <${{env.AMAL_SID}}> Error computing TOD modifiers.
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> Error computing TOD modifiers.
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.compute.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
@@ -83,8 +92,8 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         if: always() && steps.check.outputs.exit_code > 0
         env:
-          SLACK_CHANNEL: alert-test
-          SLACK_MESSAGE: <${{env.AMAL_SID}}> <${{env.CURTIS_SID}}> TOD modifiers failed validation step.
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> TOD modifiers failed validation step.
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.check.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
@@ -94,8 +103,8 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         if: always() && steps.apply.outputs.exit_code > 0
         env:
-          SLACK_CHANNEL: alert-test
-          SLACK_MESSAGE: <${{env.AMAL_SID}}> <${{env.CURTIS_SID}}> <${{env.DAN_SID}}> Error applying bid updates to bing.
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> <${{ env.DAN_SID }}> Error applying bid updates to bing.
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.apply.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
@@ -104,8 +113,8 @@ jobs:
       - name: Job success notification
         uses: rtCamp/action-slack-notify@v2
         env:
-          SLACK_CHANNEL: alert-test
-          SLACK_MESSAGE: <${{env.AMAL_SID}}> <${{env.CURTIS_SID}}> TOD modifiers updated successfully!
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> TOD modifiers updated successfully!
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
