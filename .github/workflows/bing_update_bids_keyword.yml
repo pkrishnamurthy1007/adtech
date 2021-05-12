@@ -47,41 +47,29 @@ jobs:
       - name: Compute updated bids
         id: compute
         run: |
-          echo $PYTHONPATH
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
-          echo $PYTHONPATH
           python ${GITHUB_WORKSPACE}/models/bing/keywords/compute_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
-          pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
-          relu_exit_code=$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
-          echo "::set-output name=exit_code::$pos_exit_code" # https://stackoverflow.com/questions/60453924
-          exit $relu_exit_code
+          echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
+          exit $(( $exit_code==1 ))
 
       - name: Check updated bids
         id: check
         run: |
-          echo $PYTHONPATH
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
-          echo $PYTHONPATH
           python ${GITHUB_WORKSPACE}/models/bing/keywords/check_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
-          pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
-          relu_exit_code=$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
-          echo "::set-output name=exit_code::$pos_exit_code" # https://stackoverflow.com/questions/60453924
-          exit $relu_exit_code
+          echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
+          exit $(( $exit_code==1 ))
           
       - name: Apply updated bids
         id: apply
         run: |
-          echo $PYTHONPATH
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
-          echo $PYTHONPATH
           python ${GITHUB_WORKSPACE}/models/bing/keywords/apply_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
-          pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
-          relu_exit_code=$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
-          echo "::set-output name=exit_code::$pos_exit_code" # https://stackoverflow.com/questions/60453924
-          exit $relu_exit_code
+          echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
+          exit $(( $exit_code==1 ))
       
       - name: Compute failure notification
         uses: rtCamp/action-slack-notify@v2
