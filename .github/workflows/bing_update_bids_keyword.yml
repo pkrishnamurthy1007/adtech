@@ -47,7 +47,9 @@ jobs:
       - name: Compute updated bids
         id: compute
         run: |
+          echo $PYTHONPATH
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          echo $PYTHONPATH
           python ${GITHUB_WORKSPACE}/models/bing/keywords/compute_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
@@ -58,7 +60,9 @@ jobs:
       - name: Check updated bids
         id: check
         run: |
+          echo $PYTHONPATH
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          echo $PYTHONPATH
           python ${GITHUB_WORKSPACE}/models/bing/keywords/check_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
@@ -69,7 +73,9 @@ jobs:
       - name: Apply updated bids
         id: apply
         run: |
+          echo $PYTHONPATH
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          echo $PYTHONPATH
           python ${GITHUB_WORKSPACE}/models/bing/keywords/apply_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 

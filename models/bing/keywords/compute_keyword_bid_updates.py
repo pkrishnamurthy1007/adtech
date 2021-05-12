@@ -20,7 +20,6 @@ import boto3
 #### DEFINE GLOBAL VARIABLES ####
 
 CLICKS = 120 #click threshold. level at which kw uses all of its own data
-ROI_TARGET = 1.15 # target we are aiming
 MAX_PUSH = 0.2
 MAX_CUT = -0.3
 CPC_MIN = 0.05

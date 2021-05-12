@@ -47,7 +47,9 @@ jobs:
       - name: Compute TOD modifiers
         id: compute
         run: |
+          echo $PYTHONPATH
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          echo $PYTHONPATH
           python ${GITHUB_WORKSPACE}/models/bing/time_of_day/compute_tod_bid_mods.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
@@ -58,7 +60,9 @@ jobs:
       - name: Check TOD modifiers
         id: check
         run: |
+          echo $PYTHONPATH
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          echo $PYTHONPATH
           python ${GITHUB_WORKSPACE}/models/bing/time_of_day/check_tod_bid_mods.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
@@ -69,7 +73,9 @@ jobs:
       - name: Apply TOD modifiers
         id: apply
         run: |
+          echo $PYTHONPATH
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          echo $PYTHONPATH
           python ${GITHUB_WORKSPACE}/models/bing/time_of_day/apply_tod_bid_mods.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 

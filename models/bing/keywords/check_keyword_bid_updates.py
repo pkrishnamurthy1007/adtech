@@ -30,8 +30,18 @@ total_roas
 ROI_TARGET
 #%%
 """
-u would expect REV chnage ~= (ROAS - ROI_TARGET)
-- |COST change| > | REV change | 
+WTS
+- under ROAS (ROAS < ROI_TARGET) => REV go down
+- over ROAS (ROAS > ROI_TARGET) => REV go up
+- want |ROAS miss| ~= |REV relative change|
+
+CHECKS
+- 
+- IF REV_delta_rel \in (ROAS - ROI_TARGET) * [0.8,1.25] => OK
+    ELIF REV_delta_rel \in (ROAS - ROI_TARGET) * [0.5,2] => WARN
+    ELSE => ERROR
+- |COST_delta| > |REV_delta| ELSE   => WARN
+- |COST_delta| < |REV_delta| ELSE   => ERROR
 
 """
 #%%

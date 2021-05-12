@@ -21,3 +21,4 @@ S3_OUTPUT_PREFIX = "prod/data-science/bing-keyword-bids"
 OUTPUT_DIR = rscfn(__name__, "OUTPUT")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 #%%
+ROI_TARGET = 1.15  # target we are aiming
