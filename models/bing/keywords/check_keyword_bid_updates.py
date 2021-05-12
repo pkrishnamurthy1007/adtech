@@ -1,4 +1,6 @@
-import sys
+#%%
+from models.bing.keywords.common import *
+#%%
 df_check = df_out.copy()
 df_check["change"] = df_check["max_cpc_new"]/df_check["max_cpc_old"] - 1
 df_check["cost_delta_est"] = df_check["cost_y"] * df_check["change"]

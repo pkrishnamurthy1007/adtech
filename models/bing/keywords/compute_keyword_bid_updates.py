@@ -14,20 +14,8 @@ import datetime
 import boto3
 #import bingads
 
-#### RETRIEVE ENVIRON BASE FROM SECRET MANAGER ####
-import boto3
-import json
-import os
-import base64
-
-secretsmanager = boto3.client('secretsmanager')
-sm_env_base_secret = secretsmanager.get_secret_value(
-    SecretId='SM_ENV_BASE')
-sm_env_base = json.loads(
-    base64.b64decode(
-        sm_env_base_secret["SecretBinary"]))
-# already set os env vars take precendence over aws vals
-os.environ.update({**sm_env_base, **os.environ})
+#### LOAD COMMON ####
+from models.bing.keywords.common import * 
 
 #### DEFINE GLOBAL VARIABLES ####
 
@@ -463,17 +451,12 @@ df_out = df_out.sort_values("clicks_y",ascending = False)
 df_out["rev_y"] = df_out["rev_y"].round(2)  
 df_out["cost_y"] = df_out["cost_y"].round(2)
 #%%
-#write csv 
-from pkg_resources import resource_filename as rscfn
-BIDS_DIR = rscfn(__name__,"BID_DUMPS")
-os.makedirs(BIDS_DIR,exist_ok=True)
-
+#write csv to local/s3
 df_out = df_out.set_index("account",drop=False)
 for accnt in df_out.index.unique("account"):
     accnt_dir = f"{BIDS_DIR}/{accnt}"
     os.makedirs(accnt_dir,exist_ok=True)
-    NOW_YMD = NOW.strftime("%Y-%m-%d")
-    bids_fnm = f"BIDS_{NOW_YMD}.csv"
+    bids_fnm = f"BIDS_{TODAY}.csv"
     bids_fpth = f"{BIDS_DIR}/{accnt}/{bids_fnm}"
     df_out.to_csv(bids_fpth,index=False,encoding='utf-8')
 
@@ -483,6 +466,6 @@ for accnt in df_out.index.unique("account"):
     s3_client = boto3.client('s3')
     response = s3_client.upload_file(
         bids_fpth,
-        "hc-data-lake-storage",
-        f"prod/data-science/bing-keyword-bids/{accnt}/{bids_fnm}")
+        S3_OUTPUT_BUCKET,
+        f"{S3_OUTPUT_PREFIX}/{accnt}/{bids_fnm}")
 #%%

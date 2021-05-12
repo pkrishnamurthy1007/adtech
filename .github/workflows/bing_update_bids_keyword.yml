@@ -33,7 +33,7 @@ jobs:
       - name: Activate conda env from .yml
         uses: conda-incubator/setup-miniconda@v2
         with:
-          environment-file: models/bing/keywords/conda-data-science-bing.yml
+          environment-file: models/bing/keywords/conda.yml
 
       - name: Install pip packages
         run: |
