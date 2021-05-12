@@ -64,7 +64,7 @@ CHECKS
 
 import sys
 def PASS():     pass
-def WARN():     sys.exit(-2)
+def WARN():     sys.exit(2)
 def ERROR():    sys.exit(1)
 if 0    <= rel_roas_miss_delta < 0.25:  PASS()
 if 0.25 <= rel_roas_miss_delta < 1:     WARN()
@@ -73,3 +73,4 @@ if 1 <= rel_roas_miss_delta:            ERROR()
 if abs(total_cost_delta_est) < abs(total_rev_delta_est): WARN()
 
 if total_cost_delta_est < total_rev_delta_est: ERROR()
+# %%
