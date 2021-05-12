@@ -1,8 +1,13 @@
 #%%
 from models.bing.keywords.common import *
-
+import glob
+import datetime
+import pandas as pd
+TODAY = datetime.datetime.now().date() 
+todays_output = glob.glob(f"{OUTPUT_DIR}/**/*{TODAY}.csv")
+df_out = pd.concat((pd.read_csv(fpth) for fpth in todays_output))
 #%%
-df_check = df_out.copy()
+df_check = df_out
 df_check["change"] = df_check["max_cpc_new"]/df_check["max_cpc_old"] - 1
 df_check["cost_delta_est"] = df_check["cost_y"] * df_check["change"]
 # assume rpc will be unchanged - but volume will decrease proportional

@@ -13,3 +13,4 @@ gsheets
 tqdm
 scipy
 ipykernel
+scikit-learn

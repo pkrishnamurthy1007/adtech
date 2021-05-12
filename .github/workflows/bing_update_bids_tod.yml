@@ -7,7 +7,7 @@ on:
       - models/bing/time_of_day/**
       - .github/workflows/bing_update_bids_tod.yml
   schedule:
-  - cron: "0 12 * * *" # 8 am EST
+  - cron: "0 12 * * 1" # 8 am EST - weekly on Monday
   workflow_dispatch:
 
 jobs:
@@ -44,7 +44,7 @@ jobs:
         env:
           GIT_SSH_KEY: ${{ secrets.GIT_SSH_KEY }}
 
-      - name: Compute updated bids
+      - name: Compute TOD modifiers
         id: compute
         run: |
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
@@ -55,7 +55,7 @@ jobs:
           echo "::set-output name=exit_code::$pos_exit_code" # https://stackoverflow.com/questions/60453924
           exit $relu_exit_code
 
-      - name: Check updated bids
+      - name: Check TOD modifiers
         id: check
         run: |
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
@@ -66,7 +66,7 @@ jobs:
           echo "::set-output name=exit_code::$pos_exit_code" # https://stackoverflow.com/questions/60453924
           exit $relu_exit_code
           
-      - name: Apply updated bids
+      - name: Apply TOD modifiers
         id: apply
         run: |
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
