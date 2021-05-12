@@ -7,7 +7,6 @@ DAILY KEYWORD BIDDING ALGORITHM BING
 import sys
 import os
 from models.bing.keywords.common import * 
-OUTPUT_DIR
 
 #### LOAD PACKAGES ####
 import os

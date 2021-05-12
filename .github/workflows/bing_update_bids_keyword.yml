@@ -47,8 +47,8 @@ jobs:
       - name: Compute updated bids
         id: compute
         run: |
-          cd $GITHUB_WORKSPACE
-          python -m models/bing/keywords/compute_keyword_bid_updates \
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          python ${GITHUB_WORKSPACE}/models/bing/keywords/compute_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
           relu_exit_code=$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
@@ -58,8 +58,8 @@ jobs:
       - name: Check updated bids
         id: check
         run: |
-          cd $GITHUB_WORKSPACE
-          python -m models/bing/keywords/check_keyword_bid_updates \
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          python ${GITHUB_WORKSPACE}/models/bing/keywords/check_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
           relu_exit_code=$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
@@ -69,8 +69,8 @@ jobs:
       - name: Apply updated bids
         id: apply
         run: |
-          cd $GITHUB_WORKSPACE
-          python -m models/bing/keywords/apply_keyword_bid_updates \
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          python ${GITHUB_WORKSPACE}/models/bing/keywords/apply_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
           relu_exit_code=$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
