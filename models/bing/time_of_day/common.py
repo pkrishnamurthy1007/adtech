@@ -17,7 +17,7 @@ sm_env_base = json.loads(
 os.environ.update({**sm_env_base, **os.environ})
 #%%
 S3_OUTPUT_BUCKET = "hc-data-lake-storage"
-S3_OUTPUT_PREFIX = "prod/data-science/bing-keyword-bids"
+S3_OUTPUT_PREFIX = "prod/data-science/bing-tod-mods"
 OUTPUT_DIR = rscfn(__name__, "OUTPUT")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 #%%

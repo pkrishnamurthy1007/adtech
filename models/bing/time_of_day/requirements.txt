@@ -12,3 +12,4 @@ botocore==1.19.25
 gsheets
 tqdm
 scipy
+ipykernel

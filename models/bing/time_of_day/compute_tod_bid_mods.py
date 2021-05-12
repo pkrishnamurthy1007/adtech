@@ -96,7 +96,7 @@ def get_interval_modifier_table(df,modifier_field,weight_field,show_plots=False)
     
     return pd.DataFrame(modifier_rows)
 
-def upload_interval_modifier_table(modifier_df):
+def upload_interval_modifier_table_to_redshift(modifier_df,product):
     SCHEMA = "data_science"
     BING_TOD_MODIFIER_TABLE = "tod_modifiers"
     table_creation_sql = f"""
@@ -118,6 +118,22 @@ def upload_interval_modifier_table(modifier_df):
         db.exec(table_creation_sql)
         db.load_df(modifier_df, schema=SCHEMA,
                 table=BING_TOD_MODIFIER_TABLE)
+
+def upload_interval_modifier_table_to_s3(df,product):
+    product_dir = f"{OUTPUT_DIR}/{product}"
+    os.makedirs(product_dir, exist_ok=True)
+    bids_fnm = f"BIDS_{TODAY}.csv"
+    bids_fpth = f"{OUTPUT_DIR}/{product}/{bids_fnm}"
+    df.to_csv(bids_fpth, index=False, encoding='utf-8')
+
+    #### WRITE OUTPUT TO S3 ####
+    s3_resource = boto3.resource('s3')
+
+    s3_client = boto3.client('s3')
+    response = s3_client.upload_file(
+        bids_fpth,
+        S3_OUTPUT_BUCKET,
+        f"{S3_OUTPUT_PREFIX}/{product}/{bids_fnm}")
 #%%
 TABOOLA = "TABOOLA"
 MEDIA_ALPHA = "MEDIAALPHA"
@@ -127,6 +143,7 @@ O65 = 'MEDICARE'
 BING_DAILY_INTERVALS = 7
 
 NOW = datetime.datetime.now()
+TODAY = NOW.date()
 DAY = datetime.timedelta(days=1)
 
 MONTHS = 5
@@ -137,25 +154,24 @@ window = 16
 start_date_ymd = start_date.strftime("%Y%m%d")
 end_date_ymd = end_date.strftime("%Y%m%d")
 
-product = O65
 traffic_source = BING
-for traffic_source in [BING]:
-    for product in [U65,O65]:
-        df_15m = hc_15m_user_tz(
-            start_date=start_date_ymd, end_date=end_date_ymd,
-            product=product, traffic_source=traffic_source)
+for product in [U65,O65]:
+    df_15m = hc_15m_user_tz(
+        start_date=start_date_ymd, end_date=end_date_ymd,
+        product=product, traffic_source=traffic_source)
 
-        # # CEMA
-        # df_15m = add_modifiers(df_15m,"rps","sessions",cema_transform)
-        # modifiers_df = get_interval_modifier_table(df_15m, "rps_cema_transform_modifier", "sessions_cema_transform",show_plots=True)
-        # LOWESS <- hits peaks a little better
-        df_15m = add_modifiers(df_15m,"rps","sessions",lowess_transform)
-        modifier_df = get_interval_modifier_table(df_15m, "rps_lowess_transform_modifier", "sessions_lowess_transform",show_plots=True)
-        modifier_df["calculation_date"] = NOW
-        modifier_df["product"] = product
-        modifier_df["traffic_source"] = traffic_source
+    # # CEMA
+    # df_15m = add_modifiers(df_15m,"rps","sessions",cema_transform)
+    # modifiers_df = get_interval_modifier_table(df_15m, "rps_cema_transform_modifier", "sessions_cema_transform",show_plots=True)
+    # LOWESS <- hits peaks a little better
+    df_15m = add_modifiers(df_15m,"rps","sessions",lowess_transform)
+    modifier_df = get_interval_modifier_table(df_15m, "rps_lowess_transform_modifier", "sessions_lowess_transform",show_plots=True)
+    modifier_df["calculation_date"] = NOW
+    modifier_df["product"] = product
+    modifier_df["traffic_source"] = traffic_source
 
-        upload_interval_modifier_table(modifier_df)
+    upload_interval_modifier_table_to_s3(modifier_df, product)
+    upload_interval_modifier_table_to_redshift(modifier_df,product)
 #%%
 # TODO: automate regression checks
 # ax = df_15m.plot.scatter(x="int_ix",y="sessions")
