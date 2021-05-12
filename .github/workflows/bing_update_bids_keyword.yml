@@ -47,7 +47,8 @@ jobs:
       - name: Compute updated bids
         id: compute
         run: |
-          python ${GITHUB_WORKSPACE}/models/bing/keywords/compute_keyword_bid_updates.py \
+          cd $GITHUB_WORKSPACE
+          python models/bing/keywords/compute_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
           exit $(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
@@ -55,7 +56,8 @@ jobs:
       - name: Check updated bids
         id: check
         run: |
-          python ${GITHUB_WORKSPACE}/models/bing/keywords/check_keyword_bid_updates.py \
+          cd $GITHUB_WORKSPACE
+          python models/bing/keywords/check_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
           exit $(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
@@ -63,7 +65,8 @@ jobs:
       - name: Apply updated bids
         id: apply
         run: |
-          python ${GITHUB_WORKSPACE}/models/bing/keywords/apply_keyword_bid_updates.py \
+          cd $GITHUB_WORKSPACE
+          python models/bing/keywords/apply_keyword_bid_updates.py \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
           echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
           exit $(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
