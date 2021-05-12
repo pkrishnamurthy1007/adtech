@@ -77,7 +77,7 @@ jobs:
         env:
           SLACK_CHANNEL: alert-test
           SLACK_MESSAGE: <${{ env.AMAL_SID }}> Error computing bid updates.
-          SLACK_COLOR: ${{ fromJSON('["warning","good","danger"]')[steps.compute.outputs.exit_code+1] }}
+          SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.compute.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
@@ -88,7 +88,7 @@ jobs:
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
           SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> Bid updates failed validation step.
-          SLACK_COLOR: ${{ fromJSON('["warning","good","danger"]')[steps.check.outputs.exit_code+1] }}
+          SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.check.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
@@ -99,7 +99,7 @@ jobs:
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
           SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> <${{ env.DAN_SID }}> Error applying bid updates to bing.
-          SLACK_COLOR: ${{ fromJSON('["warning","good","danger"]')[steps.apply.outputs.exit_code+1] }}
+          SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.apply.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
