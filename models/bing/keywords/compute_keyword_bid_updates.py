@@ -17,6 +17,9 @@ import boto3
 #### LOAD COMMON ####
 import sys
 sys.path.insert(0,"../../../")
+import os
+print("os.getcwd:",os.getcwd())
+print("sys.path:",sys.path)
 from models.bing.keywords.common import * 
 
 import sys; sys.exit(-2)
