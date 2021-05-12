@@ -1,4 +1,4 @@
-name: bing-update-bids-keyword
+name: bing-update-bids-tod
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-keyword-bids:
+  update-tod-modifiers:
     runs-on: ubuntu-latest
     env:
       SLACK_CHANNEL: alert-test
