@@ -17,8 +17,6 @@ import datetime
 import boto3
 #import bingads
 
-import sys; sys.exit(-2)
-
 #### DEFINE GLOBAL VARIABLES ####
 
 CLICKS = 120 #click threshold. level at which kw uses all of its own data
@@ -456,10 +454,10 @@ df_out["cost_y"] = df_out["cost_y"].round(2)
 #write csv to local/s3
 df_out = df_out.set_index("account",drop=False)
 for accnt in df_out.index.unique("account"):
-    accnt_dir = f"{BIDS_DIR}/{accnt}"
+    accnt_dir = f"{OUTPUT_DIR}/{accnt}"
     os.makedirs(accnt_dir,exist_ok=True)
     bids_fnm = f"BIDS_{TODAY}.csv"
-    bids_fpth = f"{BIDS_DIR}/{accnt}/{bids_fnm}"
+    bids_fpth = f"{OUTPUT_DIR}/{accnt}/{bids_fnm}"
     df_out.to_csv(bids_fpth,index=False,encoding='utf-8')
 
     #### WRITE OUTPUT TO S3 ####
