@@ -1,9 +1,15 @@
 #%%
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 DAILY KEYWORD BIDDING ALGORITHM BING
 """
+
+#### LOAD COMMON ####
+import sys
+sys.path.insert(0,"../../../")
+import os
+print("os.getcwd:",os.getcwd())
+print("sys.path:",sys.path)
+from models.bing.keywords.common import * 
 
 #### LOAD PACKAGES ####
 import os
@@ -13,14 +19,6 @@ import pytz
 import datetime
 import boto3
 #import bingads
-
-#### LOAD COMMON ####
-import sys
-sys.path.insert(0,"../../../")
-import os
-print("os.getcwd:",os.getcwd())
-print("sys.path:",sys.path)
-from models.bing.keywords.common import * 
 
 import sys; sys.exit(-2)
 
