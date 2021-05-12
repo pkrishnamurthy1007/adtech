@@ -48,7 +48,7 @@ jobs:
         id: compute
         run: |
           cd ${GITHUB_WORKSPACE}
-          python -m models/bing/time_of_day/compute_tod_bid_mods.py \
+          python -m models/bing/time_of_day/compute_tod_bid_mods \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
           relu_exit_code=$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
@@ -59,7 +59,7 @@ jobs:
         id: check
         run: |
           cd ${GITHUB_WORKSPACE}
-          python -m models/bing/time_of_day/check_tod_bid_mods.py \
+          python -m models/bing/time_of_day/check_tod_bid_mods \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
           relu_exit_code=$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
@@ -70,7 +70,7 @@ jobs:
         id: apply
         run: |
           cd ${GITHUB_WORKSPACE}
-          python -m models/bing/time_of_day/apply_tod_bid_mods.py \
+          python -m models/bing/time_of_day/apply_tod_bid_mods \
             && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating step on fail
           pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code )) 
           relu_exit_code=$(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
