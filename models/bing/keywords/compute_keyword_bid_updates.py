@@ -17,6 +17,8 @@ import boto3
 #### LOAD COMMON ####
 from models.bing.keywords.common import * 
 
+import sys; sys.exit(-2)
+
 #### DEFINE GLOBAL VARIABLES ####
 
 CLICKS = 120 #click threshold. level at which kw uses all of its own data

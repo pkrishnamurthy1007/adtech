@@ -48,8 +48,8 @@ jobs:
         id: compute
         run: |
           cd $GITHUB_WORKSPACE
-          python models/bing/keywords/compute_keyword_bid_updates.py \
-            && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
+          python models/bing/keywords/compute_keyword_bid_updates.py; exit_code=$?
+          pos_exit_code=$(( $exit_code > 0 ? $exit_code : -$exit_code ))
           echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
           exit $(( $exit_code > 0 ? $exit_code : 0)) # allow exit_code<0 as warning
 
@@ -112,4 +112,3 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
-          
