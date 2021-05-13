@@ -41,40 +41,52 @@ for aid,a in tqdm.tqdm(id2accnt.items()):
 
 import json
 json.dump(aid2cid2camp, open("camps.json", "w"))
-O65_camps = accnt_camps(id2accnt[O65_ACCNT_ID])
-len(O65_camps)
-#%%
-aid2cid2camp
+O65_accnt_camps = accnt_camps(id2accnt[O65_ACCNT_ID])
+print("|065_accnt_camps|:",len(O65_accnt_camps))
 #%%
 import itertools
 cross = itertools.product
 import jmespath
 get = jmespath.search
 
-R = get(
+active_camps = get(
     "*.*[] | [?is_active]",
     aid2cid2camp,
 )
-camp = R[0]
-camp["is_active"]
+print("|active campaigns|:",len(active_camps))
 #%%
-existing_camps = accnt_camps(id2accnt[TEST_ACCNT_ID])
-len(existing_camps)
-#%%
+1/0
 o65_camp_svc = CampaignService(client,O65_ACCNT_ID)
 test_camp_svc = CampaignService(client,TEST_ACCNT_ID)
-test_camp_svc.create(**{**camp,"is_active": False})
+test_accnt_camps = aid2cid2camp[TEST_ACCNT_ID].values()
+test_accnt_camp_names = {c["name"] for c in test_accnt_camps}
+print("|test_accnt_camps|:",len(test_accnt_camps))
+taboola_req_fields = [
+    "name","branding_text","cpc","spending_limit",
+    "spending_limit_model","marketing_objective"]
+for camp in active_camps:
+    # skip already created test account campaigns
+    if camp["name"] in test_accnt_camp_names: 
+        print(f"Campaign `{camp['name']}` already exists in account `{TEST_ACCNT_ID}`")
+    camp_base = {f: camp[f] for f in taboola_req_fields}
+    camp_copy = test_camp_svc.create(**camp_base)
+    print(f"created base for `{camp['name']}` in account `{TEST_ACCNT_ID}` w/ id:", camp_copy["id"])
+    updated_camp = test_camp_svc.update(camp_copy["id"], is_active=False)
+    assert updated_camp["is_active"] == False
+    print("...succesfully deactivated newly created campaign")
 #%%
-updated_camps = accnt_camps(id2accnt[TEST_ACCNT_ID])
-len(updated_camps)
+import pytaboola
+pytaboola.errors.TaboolaError
 #%%
-type(R[0])
+import traceback
+for k,attr in camp.items():
+    print(f"attempting to copy over field `{k}`...")
+    try:
+        test_camp_svc.update(updated_camp["id"],**{k: attr})
+        print("...Sucess!")
+    except (Exception,pytaboola.errors.TaboolaError) as ex:
+        print(f"Failed w/ {type(ex)}:{ex}\n{traceback.format_exc()}")
 #%%
-R[0][0].keys()
-#%%
-R[0].values()
-#%%
-R[0][1]
 #%%
 from pytaboola.services.report import \
     CampaignSummaryReport, RecirculationSummaryReport, \
