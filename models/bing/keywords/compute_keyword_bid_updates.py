@@ -465,7 +465,6 @@ def write_kw_bids_to_s3(df,accnt):
         f"{S3_OUTPUT_PREFIX}/{accnt}/{bids_fnm}")
     return response
 
-
 #write csv to local/s3
 write_kw_bids_to_s3(df_out, "ALL_ACCOUNTS")
 for accnt in df_out["account"].unique():
