@@ -20,6 +20,8 @@ jobs:
       AMAL_SID: '@U01PPS0BLKY'
       CURTIS_SID: '@U01MYTF7X18'
       DAN_SID: '@U01R2UV56Q1'
+      S3_BUCKET_HTTP_URI: https://s3.console.aws.amazon.com/s3/buckets/hc-data-lake-storage?prefix=prod/data-science/bing-tod-mods
+      S3_BUCKET_S3_URI: s3://hc-data-lake-storage/prod/data-science/bing-tod-mods/
 
     steps:
       - uses: actions/checkout@v2
@@ -88,7 +90,7 @@ jobs:
         if: always() && steps.check.outputs.exit_code != 0
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> TOD modifiers failed validation step.
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> TOD modifiers failed validation step. - <S3_LOCATION|${{ env.S3_BUCKET_HTTP_URI }}>
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.check.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
@@ -99,7 +101,7 @@ jobs:
         if: always() && steps.apply.outputs.exit_code != 0
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> Error applying TOD modifiers to bing.
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> Error applying TOD modifiers to bing. - <S3_LOCATION|${{ env.S3_BUCKET_HTTP_URI }}>
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.apply.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
@@ -109,7 +111,7 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> TOD modifiers update SUCESS!
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> TOD modifiers update SUCESS! - <S3_LOCATION|${{ env.S3_BUCKET_HTTP_URI }}>
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
@@ -119,7 +121,7 @@ jobs:
         if: failure()
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> TOD modifiers update FAILURE
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> TOD modifiers update FAILURE - <S3_LOCATION|${{ env.S3_BUCKET_HTTP_URI }}>
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions

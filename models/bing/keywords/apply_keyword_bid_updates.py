@@ -29,11 +29,9 @@ todays_output = glob.glob(f"{OUTPUT_DIR}/**/*{TODAY}.csv")
 df_out = pd.concat((pd.read_csv(fpth) for fpth in todays_output))
 
 # Debug requests and responses
-LOGLEVEL = logging.DEBUG
-logging.basicConfig(level=LOGLEVEL)
-logging.getLogger('suds.client').setLevel(LOGLEVEL)
-logging.getLogger('suds.transport.http').setLevel(LOGLEVEL)
-
+logging.basicConfig(level=logging.INFO)
+logging.getLogger('suds.client').setLevel(logging.DEBUG)
+logging.getLogger('suds.transport.http').setLevel(logging.DEBUG)
 #%%
 for accnt in df_out["account"].unique():
     print(f"Updating bids for account# `{accnt}`")
@@ -64,7 +62,7 @@ for accnt in df_out["account"].unique():
 keyword_ids = keyword_ids.astype(int)
 len(keyword_ids),len({*keyword_ids})
 #%%
-accnt
+df_out
 #%%
 bing_accnt_df
 #%%

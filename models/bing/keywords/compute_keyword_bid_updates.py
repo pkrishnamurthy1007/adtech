@@ -450,21 +450,24 @@ df_out = df_out.sort_values("clicks_y",ascending = False)
 df_out["rev_y"] = df_out["rev_y"].round(2)  
 df_out["cost_y"] = df_out["cost_y"].round(2)
 #%%
-#write csv to local/s3
-df_out = df_out.set_index("account",drop=False)
-for accnt in df_out.index.unique("account"):
+def write_kw_bids_to_s3(df,accnt):
     accnt_dir = f"{OUTPUT_DIR}/{accnt}"
-    os.makedirs(accnt_dir,exist_ok=True)
+    os.makedirs(accnt_dir, exist_ok=True)
     bids_fnm = f"BIDS_{TODAY}.csv"
     bids_fpth = f"{OUTPUT_DIR}/{accnt}/{bids_fnm}"
-    df_out.to_csv(bids_fpth,index=False,encoding='utf-8')
+    df.to_csv(bids_fpth, index=False, encoding='utf-8')
 
     #### WRITE OUTPUT TO S3 ####
-    s3_resource = boto3.resource('s3')
-
     s3_client = boto3.client('s3')
     response = s3_client.upload_file(
         bids_fpth,
         S3_OUTPUT_BUCKET,
         f"{S3_OUTPUT_PREFIX}/{accnt}/{bids_fnm}")
+    return response
+
+
+#write csv to local/s3
+write_kw_bids_to_s3(df_out, "ALL_ACCOUNTS")
+for accnt in df_out["account"].unique():
+    write_kw_bids_to_s3(df_out[df_out["account"] == accnt],accnt)
 #%%

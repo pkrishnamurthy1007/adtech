@@ -73,7 +73,9 @@ CHECKS
     - want in gh action readout:
         - ROAS stuff split out by account
         - yesterday ROAS - 7 day ,30 day 
-    - slack notif: gsheets
+    - slack notif
+        - gsheets
+        - s3 link to unified dump
     - [x] take curtis off success notifications 
     - [x] take dan off error and success notifications
 """

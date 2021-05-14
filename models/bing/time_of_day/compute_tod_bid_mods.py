@@ -127,8 +127,6 @@ def upload_interval_modifier_table_to_s3(df,product):
     df.to_csv(bids_fpth, index=False, encoding='utf-8')
 
     #### WRITE OUTPUT TO S3 ####
-    s3_resource = boto3.resource('s3')
-
     s3_client = boto3.client('s3')
     response = s3_client.upload_file(
         bids_fpth,
