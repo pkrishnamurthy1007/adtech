@@ -27,12 +27,20 @@ bing_accnt_df = pd.DataFrame(
 TODAY = "2021-05-12"
 todays_output = glob.glob(f"{OUTPUT_DIR}/**/*{TODAY}.csv")
 df_out = pd.concat((pd.read_csv(fpth) for fpth in todays_output))
+
+# Debug requests and responses
+LOGLEVEL = logging.DEBUG
+logging.basicConfig(level=LOGLEVEL)
+logging.getLogger('suds.client').setLevel(LOGLEVEL)
+logging.getLogger('suds.transport.http').setLevel(LOGLEVEL)
+
 #%%
 for accnt in df_out["account"].unique():
     print(f"Updating bids for account# `{accnt}`")
-    accnt_id = bing_accnt_df.set_index("account_number").loc["B013P57C","account_id"]
+    accnt_id = bing_accnt_df \
+        .set_index("account_number").loc[accnt,"account_id"]
     print(f"Got id `{accnt_id}` for account# `{accnt}`")
-    accnt_client = client = BingClient(
+    accnt_client = BingClient(
         account_id=accnt_id,
         customer_id=bing_creds['BING_CUSTOMER_ID'],
         dev_token=bing_creds['BING_DEVELOPER_TOKEN'],
@@ -48,14 +56,51 @@ for accnt in df_out["account"].unique():
         adgpI = df_out["adgroup_id"] == adgp
         keyword_ids, keyword_bids = df_out \
             .loc[accntI & adgpI, ['keyword_id', "max_cpc_old"]].values.T
-        response = client.update_keyword_bids(
-            adgp, [*keyword_ids.astype(int).astype(str)], [*keyword_bids.astype(float)])
+        response = accnt_client.update_keyword_bids(
+            adgp, [*keyword_ids.astype(int)], [*keyword_bids.astype(float)])
         break
         # print(f"Adgroup {adgroup} success: {response}")
 #%%
+keyword_ids = keyword_ids.astype(int)
+len(keyword_ids),len({*keyword_ids})
+#%%
+accnt
+#%%
+bing_accnt_df
+#%%
+cid = df_out.loc[accntI,"campaign_id"].unique()[0]
+accnt_client.campaign_service.GetAdGroupsByCampaignId(
+    CampaignId=cid
+)
+#%%
+accnt_client.get_campaign_by_id(cid)
+#%%
+cid
+#%%
+client.campaign_service.GetKeywordsByIds(
+    AdGroupId=adgp,
+    KeywordIds=[*keyword_ids.astype(int)],
+)
+#%%
+kwids = client.campaign_service.factory.create('KeywordIds')
+for kwid in keyword_ids.astype(int):
+    kwids.long.append(kwid)
+client.campaign_service.GetKeywordsByIds(
+    AdGroupId=adgp,
+    KeywordIds=kwids,
+)
+kwids
+#%%
+kws = accnt_client.campaign_service.GetKeywordsByAdGroupId(
+    AdGroupId=int(adgp))
+kws
+#%%
 type(adgp)
 #%%
-keyword_ids.astype(int),keyword_bids
+# Debug requests and responses
+logging.basicConfig(level=logging.INFO)
+logging.getLogger('suds.client').setLevel(logging.DEBUG)
+logging.getLogger('suds.transport.http').setLevel(logging.DEBUG)
 #%%
 key
 #%%

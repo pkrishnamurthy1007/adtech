@@ -2,7 +2,9 @@ name: bing-update-bids-keyword
 
 on:
   push:
-    # branches: [ workspace_amal ]
+    branches: 
+      - workspace_amal
+      - main
     paths:
       - models/bing/keywords/**
       - .github/workflows/bing_update_bids_keyword.yml
@@ -14,7 +16,8 @@ jobs:
   update-keyword-bids:
     runs-on: ubuntu-latest
     env:
-      SLACK_CHANNEL: adtech-alerts
+      SLACK_CHANNEL: alert-test
+      # SLACK_CHANNEL: adtech-alerts
       CHANNEL_SID: '!channel'
       AMAL_SID: '@U01PPS0BLKY'
       CURTIS_SID: '@U01MYTF7X18'
@@ -98,7 +101,7 @@ jobs:
         if: always() && steps.apply.outputs.exit_code != 0
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> <${{ env.DAN_SID }}> Error applying bid updates to bing.
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> Error applying bid updates to bing.
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.apply.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
@@ -108,7 +111,17 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> Bing keyword bids updated successfully!
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> Bing keyword bids update SUCCESS!
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
+          SLACK_USERNAME: GithubActions
+
+      - name: Job success notification
+        uses: rtCamp/action-slack-notify@v2
+        if: failure()
+        env:
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> Bing keyword bids update FAILURE
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
