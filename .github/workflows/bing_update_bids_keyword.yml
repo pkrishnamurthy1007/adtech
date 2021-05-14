@@ -1,0 +1,114 @@
+name: bing-update-bids-keyword
+
+on:
+  push:
+    # branches: [ workspace_amal ]
+    paths:
+      - models/bing/keywords/**
+      - .github/workflows/bing_update_bids_keyword.yml
+  schedule:
+  - cron: "0 12 * * *" # 8 am EST
+  workflow_dispatch:
+
+jobs:
+  update-keyword-bids:
+    runs-on: ubuntu-latest
+    env:
+      SLACK_CHANNEL: adtech-alerts
+      CHANNEL_SID: '!channel'
+      AMAL_SID: '@U01PPS0BLKY'
+      CURTIS_SID: '@U01MYTF7X18'
+      DAN_SID: '@U01R2UV56Q1' 
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          
+      - name: Activate conda env from .yml
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          environment-file: models/bing/keywords/conda.yml
+
+      - name: Install pip packages
+        run: |
+          echo "${GIT_SSH_KEY}\n" > GIT_SSH_PTH
+          chmod 600 GIT_SSH_PTH
+          GIT_SSH_COMMAND="ssh -i GIT_SSH_PTH" \
+            pip install -r ${GITHUB_WORKSPACE}/models/bing/keywords/requirements.txt
+        env:
+          GIT_SSH_KEY: ${{ secrets.GIT_SSH_KEY }}
+
+      - name: Compute updated bids
+        id: compute
+        run: |
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          python ${GITHUB_WORKSPACE}/models/bing/keywords/compute_keyword_bid_updates.py \
+            && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
+          echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
+          exit $(( $exit_code==1 ))
+
+      - name: Check updated bids
+        id: check
+        run: |
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          python ${GITHUB_WORKSPACE}/models/bing/keywords/check_keyword_bid_updates.py \
+            && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
+          echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
+          exit $(( $exit_code==1 ))
+          
+      - name: Apply updated bids
+        id: apply
+        run: |
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          python ${GITHUB_WORKSPACE}/models/bing/keywords/apply_keyword_bid_updates.py \
+            && exit_code=0 || exit_code=$? # capture exit code w/o gh terminating job on fail
+          echo "::set-output name=exit_code::$exit_code" # https://stackoverflow.com/questions/60453924
+          exit $(( $exit_code==1 ))
+      
+      - name: Compute failure notification
+        uses: rtCamp/action-slack-notify@v2
+        if: always() && steps.compute.outputs.exit_code != 0
+        env:
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> Error computing bid updates.
+          SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.compute.outputs.exit_code] }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
+          SLACK_USERNAME: GithubActions
+
+      - name: Check failure notification
+        uses: rtCamp/action-slack-notify@v2
+        if: always() && steps.check.outputs.exit_code != 0
+        env:
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> Bid updates failed validation step.
+          SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.check.outputs.exit_code] }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
+          SLACK_USERNAME: GithubActions
+
+      - name: Apply failure notification
+        uses: rtCamp/action-slack-notify@v2
+        if: always() && steps.apply.outputs.exit_code != 0
+        env:
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> <${{ env.DAN_SID }}> Error applying bid updates to bing.
+          SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.apply.outputs.exit_code] }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
+          SLACK_USERNAME: GithubActions
+
+      - name: Job success notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> Bing keyword bids updated successfully!
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
+          SLACK_USERNAME: GithubActions

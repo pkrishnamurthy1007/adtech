@@ -1,0 +1,51 @@
+name: bing-bidder-sagify
+
+on:
+  # push:
+  #   branches: [ sm_cicd ]
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          role-duration-seconds: 1200
+          role-to-assume: ${{ secrets.HC_SAGEMAKER_ROLE }}
+          # role-to-assume: ${{ secrets.PH_SAGEMAKER_ROLE }}
+          
+      - name: Install sagify
+        run: |
+          pip install sagify
+
+      - name: Sagify build
+        run: |
+          echo "${GIT_SSH_KEY}\n" > GIT_SSH_KEY_TMP
+          chmod 600 GIT_SSH_KEY_TMP
+          GIT_SSH_PTH=GIT_SSH_KEY_TMP sagify build
+        env:
+          GIT_SSH_KEY: ${{ secrets.GIT_SSH_KEY }}
+
+      - name: Sagify train
+        run: |
+          bash ${GITHUB_WORKSPACE}/sagify_train.sh
+
+      - name: Sagify deploy
+        run: |
+          bash ${GITHUB_WORKSPACE}/sagify_deploy.sh
+
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
+          SLACK_USERNAME: GithubActions

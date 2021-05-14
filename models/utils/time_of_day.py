@@ -282,8 +282,8 @@ class Lowess(BaseEstimator, RegressorMixin):
         return self.predict(x)
 
 
-def get_lowess_spline(df, timezone_field, revenue_field, show_plots=False):
-    df = calculate_bag_rps(df, 'user_ts', 'revenue').copy()
+def get_lowess_spline(df, date_field, revenue_field, show_plots=False):
+    df = calculate_bag_rps(df, date_field, revenue_field).copy()
 
     if 'weekday' not in df.columns or 'hourofday' not in df.columns or 'hourfraction' not in df.columns:
         print("`weekday`, `hourofday` and `hourfraction` fields are needed.")
