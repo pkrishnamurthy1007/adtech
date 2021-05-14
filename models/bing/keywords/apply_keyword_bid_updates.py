@@ -49,7 +49,7 @@ for accnt in df_out["account"].unique():
         keyword_ids, keyword_bids = df_out \
             .loc[accntI & adgpI, ['keyword_id', "max_cpc_old"]].values.T
         response = client.update_keyword_bids(
-            adgp, [*keyword_ids.astype(int)], [*keyword_bids.astype(float)])
+            adgp, [*keyword_ids.astype(int).astype(str)], [*keyword_bids.astype(float)])
         break
         # print(f"Adgroup {adgroup} success: {response}")
 #%%
