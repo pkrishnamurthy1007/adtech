@@ -2,9 +2,9 @@ name: bing-update-bids-keyword
 
 on:
   push:
-    branches: 
-      - workspace_amal
-      - main
+    # branches: 
+    #   - workspace_amal
+    #   - main
     paths:
       - models/bing/keywords/**
       - .github/workflows/bing_update_bids_keyword.yml
