@@ -1,4 +1,13 @@
 #%%
+import os
+import json
+json.loads(os.getenv("BING_CREDS"))
+#%%
+from ds_utils.db.connectors import HealthcareDW
+with HealthcareDW() as db:
+    df = db.to_df("select * from tron.session_revenue where False")
+df
+#%%
 import json
 import logging
 import os
@@ -6,10 +15,35 @@ import glob
 import datetime
 import pandas as pd
 from api.bingads.bingapi.client import BingClient
+json.loads(os.getenv("BING_CREDS"))
+#%%
+#%%
 from models.bing.keywords.common import *
-
+#%%
+json.loads(os.getenv("BING_CREDS"))
+#%%
 bing_creds = json.loads(os.getenv("BING_CREDS"))
-
+### TEST BING ACCESS ###
+print("Testing Bing-ads access ....")
+accnt_client = BingClient(
+    account_id=bing_creds["BING_ACCOUNT_ID"],
+    customer_id=bing_creds['BING_CUSTOMER_ID'],
+    dev_token=bing_creds["BING_DEVELOPER_TOKEN"],
+    client_id=bing_creds['BING_CLIENT_ID'],
+    refresh_token=bing_creds['BING_REFRESH_TOKEN'],
+    loglevel=logging.WARN,
+)
+print("... Success !")
+#%%
+from utils.env import *
+secretsmanager = boto3.client('secretsmanager')
+sm_env_base_secret = secretsmanager.get_secret_value(
+    SecretId=ADTECH_ENV_SECRET)
+sm_env_base = json.loads(base64.b64decode(sm_env_base_secret["SecretBinary"]))
+json.loads(sm_env_base["BING_CREDS"])
+#%%
+bing_creds
+#%%
 # from ds_utils.db.connectors import HealthcareDW,AnalyticsDB
 # with AnalyticsDB() as db:
 #     bing_accnt_df = db.to_df("select * from dev_ent_d1_gold.adtech.bingads.account")
