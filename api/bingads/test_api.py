@@ -11,7 +11,7 @@ from bingapi.client import BingClient
 # logging.getLogger('suds.transport.http').setLevel(logging.DEBUG)
 
 def main():
-    with open("config.json") as json_data_file:
+    with open("coznfig.json") as json_data_file:
         credentials = json.load(json_data_file)
 
     client = BingClient(account_id = credentials['BING_ACCOUNT_ID'],

@@ -124,10 +124,8 @@ def hc_15m_user_tz(start_date, end_date, product=None, traffic_source=None):
                 WHEN date_part(MINUTE, user_ts)::INT BETWEEN 45 AND 59 THEN 0.75
             END AS hourofday,
             count(DISTINCT user_ts::DATE) AS days_samplesize,
-            count(session_id) / count(DISTINCT user_ts::DATE) AS sessions,
-            count(revenue) AS conversions,
-            (count(revenue)::NUMERIC / count(session_id)::NUMERIC)::NUMERIC(5,4) AS conv_rate,
-            avg(revenue)::NUMERIC(8,4) AS avg_conv_value,
+            count(session_id) as sessions,
+            sum((revenue>0)::INT::FLOAT) as conversions,
             (sum(revenue) / count(DISTINCT session_id))::NUMERIC(8,4) AS rps
         FROM rps_tz_adj
         GROUP BY dayofweek,hourofday
@@ -190,7 +188,7 @@ def hc_quarter_hour_tz_adjusted_bag(start_date, end_date, product=None, traffic_
                     conversions_cum                                                     as bag_id,
                     COUNT(*) OVER (PARTITION BY conversions_cum)                        as bag_len,        
                     SUM((revenue>0)::INT) OVER (PARTITION BY conversions_cum)           as bag_conv,
-                    AVG((revenue>0)::INT::float) OVER (PARTITION BY conversions_cum)    as bag_lpc,
+                    AVG((revenue>0)::INT::FLOAT) OVER (PARTITION BY conversions_cum)    as bag_lpc,
                     SUM(revenue) OVER (PARTITION BY conversions_cum)                    as bag_rpl,
                     AVG(revenue) OVER (PARTITION BY conversions_cum)                    as bag_rpc
                 FROM session_cum_conv

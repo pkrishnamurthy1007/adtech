@@ -37,6 +37,7 @@ class LocalAuthorizationData(AuthorizationData):
 
         self.authentication = auth
 
+import logging
 class BingClient(LocalAuthorizationData):
     def __init__(self,
                  account_id: int,
@@ -44,7 +45,8 @@ class BingClient(LocalAuthorizationData):
                  dev_token: str,
                  client_id: str,
                  refresh_token: Optional[str],
-                 env: Optional[str] = 'production'):
+                 env: Optional[str] = 'production',
+                 loglevel=logging.WARNING):
         super().__init__(account_id, customer_id, dev_token, client_id, refresh_token)
         self.campaign_id = None
         self.adgroup_id = None
@@ -60,6 +62,10 @@ class BingClient(LocalAuthorizationData):
                                                     Version='2.0',
                                                     LanguageLocale='en')
             urllib.request.urlretrieve (response.FileUrl, 'geographicallocations.csv')
+
+        logger = logging.getLogger("HCcomBingClient")
+        logger.setLevel(loglevel)
+        self.logger = logger
 
     def get_campaigns(self, campaign_type: Optional[str] = 'Audience'):
         response = self.campaign_service.GetCampaignsByAccountId(
@@ -270,35 +276,31 @@ class BingClient(LocalAuthorizationData):
             AdGroupId = adgroup_id,
             KeywordIds = {'long': keyword_ids}
         )
-
         return response
 
-    def update_keyword_bids(self, adgroup_id, keyword_ids, new_bids):
+    def update_keyword_bids(self, adgroup_id, keyword_ids, new_bids, dry=False):
         kw_response = self.get_keywords(adgroup_id, keyword_ids)
-        if kw_response is None or not hasattr(kw_response, 'Keywords'):
-            print('Bad keywords fetch')
-            return None
-        else:
-            keywords = kw_response['Keywords']
+        keywords = kw_response['Keywords']
 
-        for idx, kw_bid in enumerate(new_bids):
+        for idx,(kw_id,new_kw_bid) in enumerate(zip(keyword_ids,new_bids)):
+            old_kw_bid = keywords["Keyword"][idx].Bid.Amount
+            self.logger.info((
+                f"Adjusting bid for adgroup {adgroup_id} and keyword {kw_id}"
+                f"from {old_kw_bid} to {new_kw_bid}, DRY={dry}"))
             kw_object = set_elements_to_none(self.campaign_service.factory.create('Keyword'))
             bid_object = set_elements_to_none(self.campaign_service.factory.create('Bid'))
-            bid_object.Amount = kw_bid
+            bid_object.Amount = old_kw_bid if dry else new_kw_bid
             kw_object.Bid = bid_object
             kw_object.Id = keywords['Keyword'][idx].Id
             keywords['Keyword'][idx] = kw_object
 
         response = self.campaign_service.UpdateKeywords(
-                AdGroupId = adgroup_id,
-                Keywords = keywords,
-                ReturnInheritedBidStrategyTypes = False
-            )
+            AdGroupId = adgroup_id,
+            Keywords = keywords,
+            ReturnInheritedBidStrategyTypes = False
+        )
 
-        if response is not None and hasattr(response, 'PartialErrors'):
-            if len(response['PartialErrors']) > 0:
-                print(response['PartialErrors'])
-                return False
-            else:
-                return True
-        return False
+        if response is None: raise Exception()
+        elif getattr(response, 'PartialErrors',()).__len__() > 0:
+            raise Exception(response['PartialErrors'])
+        else: return response

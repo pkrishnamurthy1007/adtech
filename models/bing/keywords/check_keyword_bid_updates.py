@@ -48,6 +48,15 @@ WTS
 - ROAS_MISS = ROAS - ROI_TARGET
 - rel_delta_delta = |REV_delta_rel - ROAS_MISS| / min(|REV_delta_rel|,|ROAS_MISS|)
 
+WED - using tues data
+- ROAS 1.07 - TARGET 1.15
+- project REV change was +4%, 0.04
+- ROAS_MISS = 0.08
+- 0.12
+~3
+
+
+
 
 CHECKS
 - 
@@ -59,7 +68,16 @@ CHECKS
     - |COST_delta| > |REV_delta|    ELSE   => WARN
 - costs always decrease more than rev
     - COST_delta < REV_delta        ELSE   => ERROR
-
+- TODO
+    - want COST_delta ~= REV_delta
+    - want in gh action readout:
+        - ROAS stuff split out by account
+        - yesterday ROAS - 7 day ,30 day 
+    - slack notif
+        - gsheets
+        - s3 link to unified dump
+    - [x] take curtis off success notifications 
+    - [x] take dan off error and success notifications
 """
 
 import sys
@@ -70,7 +88,7 @@ if 0    <= rel_roas_miss_delta < 0.25:  PASS()
 if 0.25 <= rel_roas_miss_delta < 1:     WARN()
 if 1 <= rel_roas_miss_delta:            ERROR()
 
-if abs(total_cost_delta_est) < abs(total_rev_delta_est): WARN()
+# if abs(total_cost_delta_est) < abs(total_rev_delta_est): WARN()
 
-if total_cost_delta_est < total_rev_delta_est: ERROR()
+# if total_cost_delta_est < total_rev_delta_est: ERROR()
 # %%

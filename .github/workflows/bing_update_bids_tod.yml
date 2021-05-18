@@ -2,7 +2,9 @@ name: bing-update-bids-tod
 
 on:
   push:
-    # branches: [ workspace_amal ]
+    # branches: 
+    #   - workspace_amal
+    #   - main
     paths:
       - models/bing/time_of_day/**
       - .github/workflows/bing_update_bids_tod.yml
@@ -14,11 +16,14 @@ jobs:
   update-tod-modifiers:
     runs-on: ubuntu-latest
     env:
-      SLACK_CHANNEL: adtech-alerts
+      SLACK_CHANNEL: alert-test
+      # SLACK_CHANNEL: adtech-alerts
       CHANNEL_SID: '!channel'
       AMAL_SID: '@U01PPS0BLKY'
       CURTIS_SID: '@U01MYTF7X18'
       DAN_SID: '@U01R2UV56Q1'
+      S3_BUCKET_HTTP_URI: https://s3.console.aws.amazon.com/s3/buckets/hc-data-lake-storage?prefix=prod/data-science/bing-tod-mods
+      S3_BUCKET_S3_URI: s3://hc-data-lake-storage/prod/data-science/bing-tod-mods/
 
     steps:
       - uses: actions/checkout@v2
@@ -76,7 +81,9 @@ jobs:
         if: always() && steps.compute.outputs.exit_code != 0
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> Error computing TOD modifiers.
+          SLACK_MESSAGE: \
+            <${{ env.AMAL_SID }}> Error computing TOD modifiers. - \
+            <${{ env.S3_BUCKET_HTTP_URI }}|S3_LOCATION>
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.compute.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
@@ -87,7 +94,9 @@ jobs:
         if: always() && steps.check.outputs.exit_code != 0
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> TOD modifiers failed validation step.
+          SLACK_MESSAGE: \
+            <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> TOD modifiers failed validation step. - \
+            <${{ env.S3_BUCKET_HTTP_URI }}|S3_LOCATION>
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.check.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
@@ -98,7 +107,9 @@ jobs:
         if: always() && steps.apply.outputs.exit_code != 0
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> <${{ env.DAN_SID }}> Error applying TOD modifiers to bing.
+          SLACK_MESSAGE: \
+            <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> Error applying TOD modifiers to bing. - \
+            <${{ env.S3_BUCKET_HTTP_URI }}|S3_LOCATION>
           SLACK_COLOR: ${{ fromJSON('["good","danger","warning"]')[steps.apply.outputs.exit_code] }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
@@ -108,8 +119,9 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: <${{ env.AMAL_SID }}> <${{ env.CURTIS_SID }}> TOD modifiers updated successfully!
+          SLACK_MESSAGE: \
+            <${{ env.AMAL_SID }}> TOD modifiers update SUCESS! - \
+            <${{ env.S3_BUCKET_HTTP_URI }}|S3_LOCATION>
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
-          

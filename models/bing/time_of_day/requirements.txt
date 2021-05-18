@@ -14,3 +14,4 @@ tqdm
 scipy
 ipykernel
 scikit-learn
+bingads
