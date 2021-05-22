@@ -148,6 +148,7 @@ Normalize keywords and adgroups for geo-granular campaigns
 so that data grouped on these adgroups/keywords may be shared w/in campaigns
 """
 geoI = df['campaign'].str.contains("Geo-Granular")
+df["geoI"] = geoI
 print("geoI.isna()", geoI.isna().mean(), geoI.isna().sum())
 geoI = geoI.fillna(False)
 print("geoI", geoI.mean(), geoI.sum())
@@ -180,7 +181,7 @@ I = df[["keyword","adgroup"]].values == df[["keyword_norm","adgroup_norm"]].valu
 assert I[~geoI].mean() == 1
 assert I[geoI].mean() < 1e-3 # i think all of these adgps and keywords should be modified
 # TODO: add a check for the regex replace and the `+` replace
-
+#%%
 # NOTE: grouping by campaign/adgroup/keyword strs creates more rows
 #       than grouping by their ids
 #   - maybe this is b/c the strs may be changed over time?
@@ -188,11 +189,13 @@ assert I[geoI].mean() < 1e-3 # i think all of these adgps and keywords should be
 # TODO: assign most recent campaign/adgroup/kw str to each respective id
 #   - write check to determine if that then makes grouping by str less
 #       granular than grouping by id
-camp_idx_C = ["account", "campaign_id"]
-adgp_idx_C = ["account", "campaign_id", "adgroup_norm"]
-kw_idx_C = ["account", "campaign_id", "adgroup_norm", "keyword_norm"]
+camp_idx_C = ["account", "geoI", "campaign_id"]
+adgp_idx_C = ["account", "geoI", "campaign_id", "adgroup_norm"]
+kw_idx_C = ["account", "geoI", "campaign_id", "adgroup_norm", "keyword_norm"]
 # create a key that uniquely specifies the bid values we want to write to bing
-bid_idx_C = ["account","campaign_id","adgroup_id","keyword_id","match"]
+bid_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword"]
+match_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id", "match"]
+
 df["bid_key"] = df.groupby(bid_idx_C).ngroup()
 assert df[bid_idx_C].drop_duplicates().__len__() == \
     df[[*bid_idx_C, "bid_key"]].drop_duplicates().__len__()
@@ -274,6 +277,9 @@ df_bid_perf = df \
     [(df["days_back"] <= DATE_WINDOW)] \
     .groupby(["bid_key",*kw_idx_C]) [["clicks",'rev','cost']] .agg(sum) \
     .groupby(kw_idx_C) .transform(sum)
+# df_bid_perf = df \
+#     [(df["days_back"] <= DATE_WINDOW)] \
+#     .groupby(["bid_key",*kw_idx_C]) [["clicks",'rev','cost']] .agg(sum)
 assert df_bid_perf.__len__() == \
     df_bid_perf.reset_index().drop_duplicates(subset="bid_key").__len__()
 
@@ -298,24 +304,94 @@ https://healthcareinc.slack.com/archives/C020R24TXL1/p1620413974069700
 TODO:
 - pull in geo-granular bids from other locations if data sparse 
 """
+# df_bid = df \
+#     [(df["days_back"] <= DATE_WINDOW) & (df["max_cpc"] > 0)] \
+#     [["transaction_date_time", "max_cpc", "bid_key"]] \
+#     .drop_duplicates()
+# latest_bid_I = df_bid["transaction_date_time"] == df_bid.groupby("bid_key")['transaction_date_time'].transform(max)
+# df_bid = df_bid[latest_bid_I]
+#%%
 df_bid = df \
-    [(df["days_back"] <= DATE_WINDOW) & (df["max_cpc"] > 0)] \
-    [["transaction_date_time", "max_cpc", "bid_key"]] \
+    [df["max_cpc"] > 0] \
+    [["transaction_date_time", "max_cpc", "bid_key",*kw_idx_C]] \
     .drop_duplicates()
-latest_bid_I = df_bid["transaction_date_time"] == df_bid.groupby("bid_key")['transaction_date_time'].transform(max)
+print("|df_bid|", df_bid.shape)
+# get last reported cpc per bid  
+latest_bid_I = df_bid["transaction_date_time"] == \
+    df_bid.groupby("bid_key")['transaction_date_time'].transform(max)
 df_bid = df_bid[latest_bid_I]
+print("|df_bid|", df_bid.shape)
+
+# assign last reported cpc per kw group to every bid in that kw group
+latest_kw_bid_I = df_bid["transaction_date_time"] == \
+    df_bid.groupby(kw_idx_C)['transaction_date_time'].transform(max)
+latest_kw_bid = df_bid \
+    [latest_kw_bid_I] \
+    [[*kw_idx_C, "max_cpc"]] \
+    .groupby(kw_idx_C) .mean()
+df_bid = pd.merge(
+    df_bid,
+    latest_kw_bid,
+    how="left",
+    on=kw_idx_C,
+    suffixes=("_orig",""))
+
+print("|df_bid|", df_bid.shape)
+
+df_bid["rolled_cpc_I"] = df_bid["max_cpc_orig"] != df_bid["max_cpc"]
+df_bid["cnt"] = 1
+inherited_cpc_df = df_bid.groupby(["geoI","rolled_cpc_I"])["cnt"].sum()
+print("Number of kws inheriting bids from other kws in their kw group")
+print(inherited_cpc_df)
 
 #join bids with perf data
-df_bid = pd.merge(df_bid_perf, df_bid, how="left", on=["bid_key"])
+df_bid = pd.merge(df_bid, df_bid_perf, how="left", on=["bid_key"])
+
+print("|df_bid|",df_bid.shape)
 
 #jon kw attributes
-df_bid = pd.merge(df_bid,df_attributes, how="left", on=["bid_key"])
+df_bid = pd.merge(df_bid,df_attributes, how="left", on=["bid_key"],suffixes=("","_"))
 
+"""
+TODO:
+- make `df_bid` have an entry for every kw
+- roll up data at the geo-gran kw level
+- 
+"""
+print("|df_bid|:",df_bid.shape)
+df_bid["clicks_in_window"] = df_bid["clicks"] > 0
 #keep only kws with clicks last week
 df_bid = df_bid[df_bid["clicks"] > 0]
+print("|df_bid|", df_bid.shape)
 
+print("portion of reporting rows that are geo-granular:",df["geoI"].mean())
+print("portion of keywords that are geo-granular:",
+      df[["bid_key", "geoI"]].drop_duplicates()["geoI"].mean())
+I = df.groupby("campaign")["geoI"].sum() > 0
+print("portion of campaigns that are geo-granular:",I.mean())
+print("portion of bid updates that are geo_granular:",df_bid["geoI"].mean())
+
+# NOTE: think this check is not needed anymore
+# # make sure that a `bid_key` is either geo granular or not 
+assert df[["bid_key", "geoI"]].drop_duplicates().__len__() == \
+    df.drop_duplicates(subset=["bid_key"]).__len__()
+
+assert all(df_bid.isna().sum() == 0), df_bid.isna().sum()
+
+perfC = ["clicks","rev","cost"]
+upsampled_rev_agg = df_bid[["geoI",*perfC]].groupby("geoI").sum()
+rev_agg = df \
+    .loc[df["days_back"] <= DATE_WINDOW,["geoI", *perfC]] \
+    .groupby("geoI").sum()
+upsample_proportions = (upsampled_rev_agg - rev_agg).abs() / rev_agg
+print("revenue upsampling broken out by geolocation bool:")
+print(upsample_proportions)
+assert all(upsample_proportions.loc[False] < 0.1)
+assert all(upsample_proportions.loc[True] > 50)
+assert all(upsample_proportions.loc[True] < 65)
+#%%
 # """
-# Q: 
+# Q:
 # - so - cpc unique by bid
 # - multiple bids in kw grouping
 # - is cpc ever diff w/in a kw grouping?

@@ -1,4 +1,7 @@
 #%%
+# disabiling update application for now
+import sys
+sys.exit(0)
 #%%
 import json
 import logging
