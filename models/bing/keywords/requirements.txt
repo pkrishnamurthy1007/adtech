@@ -13,3 +13,4 @@ gsheets
 tqdm
 ipykernel
 bingads
+s3fs
