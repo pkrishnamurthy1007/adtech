@@ -193,7 +193,7 @@ camp_idx_C = ["account", "geoI", "campaign_id"]
 adgp_idx_C = ["account", "geoI", "campaign_id", "adgroup_norm"]
 kw_idx_C = ["account", "geoI", "campaign_id", "adgroup_norm", "keyword_norm"]
 # create a key that uniquely specifies the bid values we want to write to bing
-bid_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword"]
+bid_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id"]
 match_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id", "match"]
 
 df["bid_key"] = df.groupby(bid_idx_C).ngroup()

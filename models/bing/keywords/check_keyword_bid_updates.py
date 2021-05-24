@@ -40,6 +40,29 @@ pprint.pprint({
 })
 #%%
 """
+# TODO: make sure >= 51 state kws w/ in each geo gran gp - once we start using Dans catalog tables 
+
+kw_idx_C = ["account", "geoI", "campaign_id", "adgroup_norm", "keyword_norm"]
+bid_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id"]
+match_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id", "match"]
+df[match_idx_C].drop_duplicates().shape
+#%%
+df[kw_idx_C].drop_duplicates().shape
+#%%
+df["cnt"] = 1
+geo_gran_cnts = df \
+    [geoI] \
+    .drop_duplicates(bid_idx_C) \
+    .groupby(kw_idx_C) ["cnt"] .count() \
+    .reset_index()
+geo_gran_cnts
+#%%
+[*geo_gran_cnts["keyword_norm"]]
+#%%
+df[geoI]["adgroup_norm"].drop_duplicates()
+"""
+#%%
+"""
 WTS
 - under ROAS (ROAS < ROI_TARGET) => VOL & REV go down
 - over ROAS (ROAS > ROI_TARGET) => VOL & REV go up
