@@ -13,5 +13,5 @@ gsheets
 tqdm
 ipykernel
 bingads
-s3fs
 docutils
+s3fs

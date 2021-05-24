@@ -46,6 +46,7 @@ jobs:
           chmod 600 GIT_SSH_PTH
           GIT_SSH_COMMAND="ssh -i GIT_SSH_PTH" \
             pip install -r ${GITHUB_WORKSPACE}/models/bing/keywords/requirements.txt
+          pip freeze
         env:
           GIT_SSH_KEY: ${{ secrets.GIT_SSH_KEY }}
 
