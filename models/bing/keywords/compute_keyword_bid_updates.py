@@ -27,7 +27,6 @@ CPC_MIN = 0.05
 NOW = datetime.datetime.now(pytz.timezone('EST'))
 TODAY = NOW.date()
 WEEKDAY = TODAY.weekday()
-DAYS_BACK = 1
 
 query = f"""
 SELECT 
@@ -152,35 +151,79 @@ df["geoI"] = geoI
 print("geoI.isna()", geoI.isna().mean(), geoI.isna().sum())
 geoI = geoI.fillna(False)
 print("geoI", geoI.mean(), geoI.sum())
-df[["adgroup_norm","keyword_norm"]] = df[["adgroup","keyword"]]
-df.loc[geoI,"keyword_norm"] = df.loc[geoI,"keyword"].str.replace(r"+","")
 
 # find keyws for granular geo data
-states_to_clean = [
-    "[Aa]labama","[Aa]laska","[Aa]rizona", "[Aa]rkansas","[Cc]alifornia","[Cc]olorado","[Cc]onnecticut",
-    "[Dd]elaware","DC","dc","[Ff]lorida","[Gg]eorgia","[Hh]awaii", "[Ii]daho", "[Ii]llinois", "[Ii]ndiana",
-    "[Ii]owa", "[Kk]ansas", "[Kk]entucky","[Ll]ouisiana", "[Mm]aine", "[Mm]aryland", "[Mm]assachusetts", 
-    "[Mm]ichigan", "[Mm]innesota", "[Mm]ississippi", "[Mm]issouri", "[Mm]ontana", "[Nn]ebraska",
-    "[Nn]evada", "[Nn]ew[ -][Yy]ork", "\\+[Nn]ew \\+[Yy]ork", "[Oo]hio", "[Oo]klahoma", "[Oo]regon", "[Pp]ennsylvania", 
-    "\\+?[Rr]hode[- ]\\+?[Ii]sland","\\+?[Ss]outh[- ]\\+?[Dd]akota",
-    "\\+?[Nn]orth[ -]\\+?[Dd]akota","\\+?[Nn]ew[ -]\\+?[Hh]ampshire",
-    "\\+?[Nn]ew[ -]\\+?[Jj]ersey","\\+?[Nn]ew[ -]\\+?[Mm]exico","\\+?[Nn]orth[ -]\\+?[Cc]arolina","\\+?[Ss]outh[ -]\\+?[Cc]arolina",
-    "[Tt]ennessee", "\\+?[Ww]est[ -]\\+?[Vv]irginia",
-    "[Tt]exas", "[Uu]tah", "[Vv]irginia", "[Vv]ermont",
-    "[Ww]ashington", "[Ww]isconsin", "[Ww]est[ -][Vv]irginia","\\+[Ww]est \\+[Vv]irginia","[Ww]yoming"]
+STATES = [
+    "Alaska", "Alabama", "Arkansas", 
+    "American Samoa", "Samoa", 
+    "Arizona", "California", "Colorado", "Connecticut", 
+    "District of Columbia", "DC", "District Columbia",
+    "Delaware", "Florida", "Georgia", 
+    "Guam", "Hawaii", "Iowa", "Idaho", "Illinois", "Indiana", 
+    "Kansas", "Kentucky", "Louisiana", "Massachusetts", 
+    "Maryland", "Maine", "Michigan", "Minnesota", "Missouri", 
+    "Mississippi", "Montana", "North Carolina", "North Dakota",
+    "Nebraska", "New Hampshire", "New Jersey", "New Mexico",
+    "Nevada", "New York", "Ohio", "Oklahoma", "Oregon",
+    "Pennsylvania", "Puerto Rico", "Rhode Island",
+    "South Carolina", "South Dakota", "Tennessee", "Texas",
+    "Utah", "Virginia", "Virgin Islands", "Vermont",
+    "Washington", "Wisconsin", "West Virginia", "Wyoming",
+    ]
+"""
+after discussion w/ @Curtis - we want the match types preserved
+in the keyword string 
 
-import tqdm
-#replace the state names in adg and kws
-for state in tqdm.tqdm(states_to_clean):
-    df.loc[geoI, "adgroup_norm"] = df.loc[geoI, "adgroup_norm"] \
-        .str.replace(state, "state", regex=True)
-    df.loc[geoI, "keyword_norm"] = df.loc[geoI, "keyword_norm"] \
-        .str.replace(state, "state", regex=True)
+apparently the `+` prefix indicates a different match type for 
+tokens w/in a keyword - and should be separated out into
+a different geo granular keyword
 
-I = df[["keyword","adgroup"]].values == df[["keyword_norm","adgroup_norm"]].values
+e.g.:
+'marketplace new york'      =>      'marketplace <STATE>'
+'+marketplace +new +york'   =>      '+marketplace +<STATE>'
+
+NOTE: in general 2 word states will have a `+` in the middle 
+    if and only if they are preceded by a `+` 
+
+NOTE: kw query
+```
+# adgp = df.loc[geoI,"adgroup"].unique()[0]
+# adgpI = df["adgroup"] == adgp
+camp = df.loc[geoI, "campaign_id"].unique()[0]
+campI = df["campaign_id"] == camp
+nyI = df['keyword'].str.lower().str.contains("york")
+dashI = df['keyword'].str.lower().str.contains("-")
+df.loc[geoI & campI & nyI,"keyword"] \
+    .drop_duplicates() \
+    .values
+```
+
+"""
+STATE_TAG = "<STATE>"
+def get_state_regex(state):
+    # optionally match intravening but not preceding `+`
+    state_regex = "[ -]\+?".join(state.split())
+    # state_regex = f"\\b{state_regex}\\b"
+    return state_regex
+import re
+state_regexes = [get_state_regex(state) for state in STATES]
+unified_state_regex = re.compile(f"({'|'.join(state_regexes)})",re.IGNORECASE)
+
+df[["adgroup_norm", "keyword_norm"]] = df[["adgroup", "keyword"]]
+df.loc[geoI,"keyword_norm"] = df \
+    .loc[geoI,"keyword"] \
+    .str.replace(unified_state_regex,STATE_TAG)
+df.loc[geoI,"adgroup_norm"] = df \
+    .loc[geoI,"adgroup"] \
+    .str.replace(unified_state_regex,STATE_TAG)
+
+I = df[["keyword","adgroup"]].values == df[["keyword_norm","adgroup_norm"]]
+I = (I.prod(axis=1) == 1) | df["keyword"].isna()
+I.mean(),I[~geoI].mean(),I[geoI].mean() 
 assert I[~geoI].mean() == 1
-assert I[geoI].mean() < 1e-3 # i think all of these adgps and keywords should be modified
-# TODO: add a check for the regex replace and the `+` replace
+assert I[geoI].mean() == 0
+assert all(df.loc[geoI,"keyword_norm"].str.contains(STATE_TAG))
+assert all(df.loc[geoI,"adgroup_norm"].str.contains(STATE_TAG))
 #%%
 # NOTE: grouping by campaign/adgroup/keyword strs creates more rows
 #       than grouping by their ids
@@ -195,6 +238,28 @@ kw_idx_C = ["account", "geoI", "campaign_id", "adgroup_norm", "keyword_norm"]
 # create a key that uniquely specifies the bid values we want to write to bing
 bid_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id"]
 match_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id", "match"]
+for nm,C in {
+        "camp": camp_idx_C,
+        "adgp": adgp_idx_C,
+        "kw": kw_idx_C,
+        "bid": bid_idx_C,
+        "match": match_idx_C,
+    }.items():
+    print(nm,df[C].drop_duplicates().shape)
+    print(nm, df[C+["match"]].drop_duplicates().shape)
+
+df["cnt"] = 1
+geo_gran_kw_cnts = df \
+    .drop_duplicates(bid_idx_C) \
+    .groupby(kw_idx_C)[["cnt"]] .count()
+geo_gran_kw_cnts = geo_gran_kw_cnts.sort_values(by="cnt")
+# TODO: eventuall want `all(geo_gran_kw_cnts["cnt"] == 51)`
+# make sure any geo gran kw grouping w/ more than 51 kws
+#   has the no longer used double state pattern
+bad_kws = geo_gran_kw_cnts \
+    [geo_gran_kw_cnts["cnt"] > 51] \
+    .reset_index() ["keyword_norm"] 
+assert all(bad_kws.str.count(STATE_TAG) > 1)
 
 df["bid_key"] = df.groupby(bid_idx_C).ngroup()
 assert df[bid_idx_C].drop_duplicates().__len__() == \
@@ -387,8 +452,8 @@ upsample_proportions = (upsampled_rev_agg - rev_agg).abs() / rev_agg
 print("revenue upsampling broken out by geolocation bool:")
 print(upsample_proportions)
 assert all(upsample_proportions.loc[False] < 0.1)
-assert all(upsample_proportions.loc[True] > 50)
-assert all(upsample_proportions.loc[True] < 65)
+assert all(upsample_proportions.loc[True] > 35)
+assert all(upsample_proportions.loc[True] < 60)
 #%%
 # """
 # Q:
@@ -399,7 +464,7 @@ assert all(upsample_proportions.loc[True] < 65)
 # @Curtis said its probably fine
 # """
 # df_bid.groupby(kw_idx_C)["max_cpc"].std()
-#%%
+
 #### CREATE AGGREGATIONS FOR USE IN RPC ###
 # simplify df
 df_rpc = df \
@@ -525,6 +590,8 @@ df_out = df_out.sort_values("clicks_y",ascending = False)
 
 df_out["rev_y"] = df_out["rev_y"].round(2)  
 df_out["cost_y"] = df_out["cost_y"].round(2)
+#%%
+df_out.shape
 #%%
 def write_kw_bids_to_s3(df,accnt):
     accnt_dir = f"{OUTPUT_DIR}/{accnt}"
