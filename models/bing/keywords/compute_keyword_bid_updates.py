@@ -590,9 +590,7 @@ df_out = df_out.sort_values("clicks_y",ascending = False)
 
 df_out["rev_y"] = df_out["rev_y"].round(2)  
 df_out["cost_y"] = df_out["cost_y"].round(2)
-#%%
-df_out.shape
-#%%
+
 def write_kw_bids_to_s3(df,accnt):
     accnt_dir = f"{OUTPUT_DIR}/{accnt}"
     os.makedirs(accnt_dir, exist_ok=True)

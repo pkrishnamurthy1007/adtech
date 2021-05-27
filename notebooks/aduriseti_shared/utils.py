@@ -8,3 +8,4 @@ def fetch_head(rsc,limit=1000,src=HealthcareDW):
         db \
             .to_df(f"select * from {rsc} limit {limit}") \
             .to_csv(f"{TABLE_DUMPS}/{src.__name__}.{rsc}.csv")
+    return db
