@@ -1,5 +1,7 @@
 from ds_utils.db.connectors import HealthcareDW
+import functools
 
+@functools.lru_cache()
 def hc_session_conversions(start_date, end_date, product=None, traffic_source=None):
 
     product_filter = "" if product is None else f"AND s.product = '{product}'"
@@ -59,7 +61,7 @@ def hc_session_conversions(start_date, end_date, product=None, traffic_source=No
 
     return df
 
-
+@functools.lru_cache()
 def hc_15m_user_tz(start_date, end_date, product=None, traffic_source=None):
     product_filter = "" if product is None else \
         f"AND UPPER(s.product) = UPPER('{product}')"
@@ -144,6 +146,7 @@ def hc_15m_user_tz(start_date, end_date, product=None, traffic_source=None):
 """
 ========================= BAG KPI QUERY =========================
 """
+@functools.lru_cache()
 def hc_quarter_hour_tz_adjusted_bag(start_date, end_date, product=None, traffic_source=None):
     product_filter = "" if product is None else \
         f"AND UPPER(s.product) = UPPER('{product}')"

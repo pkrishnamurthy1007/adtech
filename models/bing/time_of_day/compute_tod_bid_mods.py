@@ -153,7 +153,7 @@ start_date_ymd = start_date.strftime("%Y%m%d")
 end_date_ymd = end_date.strftime("%Y%m%d")
 
 traffic_source = BING
-for product in [U65,O65]:
+for product in [U65,O65,None]:
     df_15m = hc_15m_user_tz(
         start_date=start_date_ymd, end_date=end_date_ymd,
         product=product, traffic_source=traffic_source)
