@@ -263,7 +263,7 @@ assert all(bad_kws.str.count(STATE_TAG) > 1)
 
 df["bid_key"] = df.groupby(bid_idx_C).ngroup()
 assert df[bid_idx_C].drop_duplicates().__len__() == \
-    df[[*bid_idx_C, "bid_key"]].drop_duplicates().__len__()
+    df[[*bid_idx_C,"bid_key"]].drop_duplicates().__len__()
 # """
 # CPC field max_cpc is populated from CurrentMaxCpc from the raw table "bing_keyword" (edited) 
 # 1:29
@@ -311,7 +311,7 @@ assert df[bid_idx_C].drop_duplicates().__len__() == \
 # df \
 #     .groupby(bid_idx_C+adgp_idx_C)["max_cpc"].mean() \
 #     .groupby(adgp_idx_C).std()
-#%%
+
 #### PREPARED YESTERDAY DATA FOR USE IN BID CHANGES ####
 
 #store keyword attributes including match type
@@ -338,15 +338,15 @@ CHANGED:
 """
 DATE_WINDOW = 7
 # get rev,click,cost sums for past week
+performance_C = ["clicks",'rev','cost']
 df_bid_perf = df \
     [(df["days_back"] <= DATE_WINDOW)] \
-    .groupby(["bid_key",*kw_idx_C]) [["clicks",'rev','cost']] .agg(sum) \
-    .groupby(kw_idx_C) .transform(sum)
+    .groupby(["bid_key"]) [performance_C] .agg(sum)
 # df_bid_perf = df \
 #     [(df["days_back"] <= DATE_WINDOW)] \
 #     .groupby(["bid_key",*kw_idx_C]) [["clicks",'rev','cost']] .agg(sum)
 assert df_bid_perf.__len__() == \
-    df_bid_perf.reset_index().drop_duplicates(subset="bid_key").__len__()
+    df_bid_perf.reset_index().drop_duplicates(subset=["bid_key"]).__len__()
 
 # get latest bids for last week kws
 """
@@ -375,16 +375,19 @@ TODO:
 #     .drop_duplicates()
 # latest_bid_I = df_bid["transaction_date_time"] == df_bid.groupby("bid_key")['transaction_date_time'].transform(max)
 # df_bid = df_bid[latest_bid_I]
-#%%
+
 df_bid = df \
     [df["max_cpc"] > 0] \
-    [["transaction_date_time", "max_cpc", "bid_key",*kw_idx_C]] \
-    .drop_duplicates()
+    [["transaction_date_time", "max_cpc", "bid_key",*kw_idx_C]]
 print("|df_bid|", df_bid.shape)
 # get last reported cpc per bid  
 latest_bid_I = df_bid["transaction_date_time"] == \
     df_bid.groupby("bid_key")['transaction_date_time'].transform(max)
 df_bid = df_bid[latest_bid_I]
+print("|df_bid|", df_bid.shape)
+# if there are multiple last reported bids per kw - use mean
+df_bid["max_cpc"] = df_bid.groupby("bid_key")["max_cpc"].transform("mean")
+df_bid = df_bid.drop_duplicates("bid_key")
 print("|df_bid|", df_bid.shape)
 
 # assign last reported cpc per kw group to every bid in that kw group
@@ -411,7 +414,10 @@ print(inherited_cpc_df)
 
 #join bids with perf data
 df_bid = pd.merge(df_bid, df_bid_perf, how="left", on=["bid_key"])
-
+df_bid[performance_C] = df_bid[performance_C].fillna(0)
+df_bid[[f"{c}_raw" for c in performance_C]] = df_bid[performance_C]
+df_bid[performance_C] = df_bid \
+    .groupby(kw_idx_C) [performance_C] .transform(sum)
 print("|df_bid|",df_bid.shape)
 
 #jon kw attributes
@@ -443,15 +449,15 @@ assert df[["bid_key", "geoI"]].drop_duplicates().__len__() == \
 
 assert all(df_bid.isna().sum() == 0), df_bid.isna().sum()
 
-perfC = ["clicks","rev","cost"]
-upsampled_rev_agg = df_bid[["geoI",*perfC]].groupby("geoI").sum()
+upsampled_rev_agg = df_bid[["geoI",*performance_C]].groupby("geoI").sum()
 rev_agg = df \
-    .loc[df["days_back"] <= DATE_WINDOW,["geoI", *perfC]] \
+    .loc[df["days_back"] <= DATE_WINDOW,["geoI", *performance_C]] \
     .groupby("geoI").sum()
 upsample_proportions = (upsampled_rev_agg - rev_agg).abs() / rev_agg
 print("revenue upsampling broken out by geolocation bool:")
 print(upsample_proportions)
-assert all(upsample_proportions.loc[False] < 0.1)
+
+assert all(upsample_proportions.loc[False] < 0.15)
 assert all(upsample_proportions.loc[True] > 35)
 assert all(upsample_proportions.loc[True] < 60)
 #%%
@@ -581,15 +587,26 @@ df_bid["max_cpc_new"] = df_bid["max_cpc_new"].round(2)
 df_bid["bid_change"] = df_bid["max_cpc_new"] - df_bid["max_cpc_old"]
 
 #prepare output
-df_out = df_bid[["account","campaign_id","adgroup_id","keyword_id","campaign","adgroup","keyword","match","clicks","rev","cost","max_cpc_old","max_cpc_new","rpc_est","cpc_target","bid_change","perc_change"]]
-df_out = df_out.rename(columns={"clicks": "clicks_y"})
-df_out = df_out.rename(columns={"rev": "rev_y"})
-df_out = df_out.rename(columns={"cost": "cost_y"})
+df_out = df_bid[
+    ["account", "match",
+    "campaign_id","adgroup_id","keyword_id",
+    "campaign","adgroup","keyword",
+    "clicks","rev","cost",
+    "clicks_raw", "rev_raw", "cost_raw",
+    "max_cpc_old","max_cpc_new",
+    "rpc_est","cpc_target",
+    "bid_change","perc_change"]]
+df_out = df_out.rename(
+    columns={
+        "clicks": "clicks_kw_group",
+        "rev": "rev_kw_group",
+        "cost": "cost_kw_group",
+    })
 
-df_out = df_out.sort_values("clicks_y",ascending = False)
+df_out = df_out.sort_values("clicks_kw_group",ascending = False)
 
-df_out["rev_y"] = df_out["rev_y"].round(2)  
-df_out["cost_y"] = df_out["cost_y"].round(2)
+df_out["rev_kw_group"] = df_out["rev_kw_group"].round(2)  
+df_out["cost_kw_group"] = df_out["cost_kw_group"].round(2)
 
 def write_kw_bids_to_s3(df,accnt):
     accnt_dir = f"{OUTPUT_DIR}/{accnt}"
