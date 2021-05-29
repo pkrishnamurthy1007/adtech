@@ -9,23 +9,23 @@ df_out = pd.concat((pd.read_csv(fpth) for fpth in todays_output))
 #%%
 df_check = df_out
 df_check["change"] = df_check["max_cpc_new"]/df_check["max_cpc_old"] - 1
-df_check["cost_delta_est"] = df_check["cost_y"] * df_check["change"]
+df_check["cost_delta_est"] = df_check["cost_raw"] * df_check["change"]
 # assume rpc will be unchanged - but volume will decrease proportional
 #   to bid change
-df_check["rev_delta_est"] = df_check["rev_y"] * df_check["change"]
-df_check["roas"] = df_check["rev_y"] / df_check["cost_y"]
+df_check["rev_delta_est"] = df_check["rev_raw"] * df_check["change"]
+df_check["roas"] = df_check["rev_raw"] / df_check["cost_raw"]
 
-total_roas = df_check["rev_y"].sum() / df_check["cost_y"].sum()
+total_roas = df_check["rev_raw"].sum() / df_check["cost_raw"].sum()
 total_cost_delta_est = df_check["cost_delta_est"].sum()
 total_rev_delta_est = df_check["rev_delta_est"].sum()
 
 total_rel_delta = df_check[["rev_delta_est","cost_delta_est"]].sum() / \
-    df_check[["rev_y", "cost_y"]].sum().values
+    df_check[["rev_raw", "cost_raw"]].sum().values
 roas_miss = total_roas - ROI_TARGET
 roas_miss_delta = roas_miss - total_rel_delta["rev_delta_est"]
 rel_roas_miss_delta = abs(roas_miss_delta) / min(abs(roas_miss),abs(total_rel_delta["rev_delta_est"]))
 
-print("AGGREGATE:\n",df_check[["rev_y", "cost_y", "cost_delta_est", "rev_delta_est"]].sum())
+print("AGGREGATE:\n",df_check[["rev_raw", "cost_raw", "cost_delta_est", "rev_delta_est"]].sum())
 print("RELATIVE:\n", total_rel_delta)
 import pprint
 pprint.pprint({
