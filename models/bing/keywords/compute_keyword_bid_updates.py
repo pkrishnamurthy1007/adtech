@@ -147,10 +147,10 @@ Normalize keywords and adgroups for geo-granular campaigns
 so that data grouped on these adgroups/keywords may be shared w/in campaigns
 """
 geoI = df['campaign'].str.contains("Geo-Granular")
-df["geoI"] = geoI
 print("geoI.isna()", geoI.isna().mean(), geoI.isna().sum())
 geoI = geoI.fillna(False)
 print("geoI", geoI.mean(), geoI.sum())
+df["geoI"] = geoI
 
 # find keyws for granular geo data
 STATES = [
@@ -236,7 +236,8 @@ camp_idx_C = ["account", "geoI", "campaign_id"]
 adgp_idx_C = ["account", "geoI", "campaign_id", "adgroup_norm"]
 kw_idx_C = ["account", "geoI", "campaign_id", "adgroup_norm", "keyword_norm"]
 # create a key that uniquely specifies the bid values we want to write to bing
-bid_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id"]
+# bid_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id"]
+bid_idx_C = ["account", "geoI", "campaign_id", "adgroup", "keyword"]
 match_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id", "match"]
 for nm,C in {
         "camp": camp_idx_C,
@@ -256,11 +257,12 @@ geo_gran_kw_cnts = geo_gran_kw_cnts.sort_values(by="cnt")
 # TODO: eventuall want `all(geo_gran_kw_cnts["cnt"] == 51)`
 # make sure any geo gran kw grouping w/ more than 51 kws
 #   has the no longer used double state pattern
+# TODO: should be > 51 - but breaking out bids by name 
+#       creates some extra bid entries per bid
 bad_kws = geo_gran_kw_cnts \
-    [geo_gran_kw_cnts["cnt"] > 51] \
+    [geo_gran_kw_cnts["cnt"] > 60] \
     .reset_index() ["keyword_norm"] 
 assert all(bad_kws.str.count(STATE_TAG) > 1)
-
 df["bid_key"] = df.groupby(bid_idx_C).ngroup()
 assert df[bid_idx_C].drop_duplicates().__len__() == \
     df[[*bid_idx_C,"bid_key"]].drop_duplicates().__len__()
@@ -457,9 +459,24 @@ upsample_proportions = (upsampled_rev_agg - rev_agg).abs() / rev_agg
 print("revenue upsampling broken out by geolocation bool:")
 print(upsample_proportions)
 
-assert all(upsample_proportions.loc[False] < 0.15)
-assert all(upsample_proportions.loc[True] > 35)
+assert all(upsample_proportions.loc[False] < 0.01)
+assert all(upsample_proportions.loc[True] > 40)
 assert all(upsample_proportions.loc[True] < 60)
+#%%
+# upsampled_rev_agg = df_bid\
+#     .loc[:,[*bid_idx_C,*performance_C]] \
+#     .groupby(bid_idx_C) \
+#     [performance_C].sum()
+# rev_agg = df \
+#     .loc[df["days_back"] <= DATE_WINDOW,
+#         [*bid_idx_C,*performance_C]] \
+#     .groupby(bid_idx_C) \
+#     [performance_C].sum()
+# df_ = df.drop_duplicates(bid_idx_C)
+# df_\
+#     [~df_["geoI"]] \
+#     .groupby(kw_idx_C)[["cnt"]].count() \
+#     .sort_values("cnt")
 #%%
 # """
 # Q:
