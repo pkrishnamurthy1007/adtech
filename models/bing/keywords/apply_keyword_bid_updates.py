@@ -75,7 +75,8 @@ for accnt in df_out["account"].unique():
     keyword_bids_old = [*keyword_bids_old.astype(float)]
     keyword_bids_new = [*keyword_bids_new.astype(float)]
     keyword_bids_test = [*keyword_bids_test.astype(float)]
-    keyword_bids = keyword_bids_test # only update w/ a random push of +- 0.01$ to test
+    # keyword_bids = keyword_bids_test # only update w/ a random push of +- 0.01$ to test
+    keyword_bids = keyword_bids_new # actually update keyword bids
     keyword_updates = accnt_client.bulk_update_keyword_bids(adgroup_ids,keyword_ids,keyword_bids)
     keyword_bid_updates = [kwu.keyword.Bid.Amount for kwu in keyword_updates]
     assert all(np.array(sorted(keyword_bid_updates)) == np.array(sorted(keyword_bids)))

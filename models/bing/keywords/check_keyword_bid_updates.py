@@ -3,10 +3,23 @@ from models.bing.keywords.common import *
 import glob
 import datetime
 import pandas as pd
-TODAY = datetime.datetime.now().date() 
-todays_output = glob.glob(f"{OUTPUT_DIR}/**/*{TODAY}.csv")
-df_out = pd.concat((pd.read_csv(fpth) for fpth in todays_output))
-df_out = df_out.drop_duplicates()
+
+TODAY = datetime.datetime.now().date()
+# todays_output = glob.glob(f"{OUTPUT_DIR}/**/*{TODAY}.csv")
+# df_out = pd.concat((pd.read_csv(fpth) for fpth in todays_output))
+import boto3
+ls_resp = boto3.client("s3").list_objects(Bucket=S3_OUTPUT_BUCKET,Prefix=S3_OUTPUT_PREFIX)
+prev_output_keys = [o["Key"] for o in ls_resp["Contents"]]
+todays_output_keys = [k for k in prev_output_keys if k.endswith(f"{TODAY}.csv")]
+
+todays_output = [pd.read_csv(f"s3://{S3_OUTPUT_BUCKET}/{k}") for k in todays_output_keys]
+df_out = pd.concat(todays_output)
+old_len = df_out.__len__()
+df_out = df_out.drop_duplicates() 
+assert df_out.__len__() * 2 == old_len, """
+We should have 2 records for each kw b/c we break bids out by account and write them,
+but we also write the bids for all accounts.
+"""
 #%%
 df_check = df_out
 df_check["change"] = df_check["max_cpc_new"]/df_check["max_cpc_old"] - 1
