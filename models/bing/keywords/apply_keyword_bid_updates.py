@@ -80,3 +80,5 @@ for accnt in df_out["account"].unique():
     keyword_updates = accnt_client.bulk_update_keyword_bids(adgroup_ids,keyword_ids,keyword_bids)
     keyword_bid_updates = [kwu.keyword.Bid.Amount for kwu in keyword_updates]
     assert all(np.array(sorted(keyword_bid_updates)) == np.array(sorted(keyword_bids)))
+
+# %%
