@@ -22,30 +22,33 @@ but we also write the bids for all accounts.
 """
 #%%
 df_check = df_out
+df_check["roas"] = df_check["rev_raw"] / df_check["cost_raw"]
 df_check["change"] = df_check["max_cpc_new"]/df_check["max_cpc_old"] - 1
+df_check["cost_t+1_est"] = (df_check["change"]+1) * df_check["cost_raw"]
+df_check["rev_t+1_est"] = (df_check["change"]+1) * df_check["rev_raw"]
 df_check["cost_delta_est"] = df_check["cost_raw"] * df_check["change"]
-# assume rpc will be unchanged - but volume will decrease proportional
+# assume rpc will be unchanged - but volume will increase/decrease proportional
 #   to bid change
 df_check["rev_delta_est"] = df_check["rev_raw"] * df_check["change"]
-df_check["roas"] = df_check["rev_raw"] / df_check["cost_raw"]
+
+U = df_check[["cost_t+1_est","rev_t+1_est"]]
+V = df_check[["cost_raw","rev_raw"]] + df_check[["cost_delta_est","rev_delta_est"]].values
+assert all((U - V.values).abs() < 1e-10)
 
 total_roas = df_check["rev_raw"].sum() / df_check["cost_raw"].sum()
-total_cost_delta_est = df_check["cost_delta_est"].sum()
-total_rev_delta_est = df_check["rev_delta_est"].sum()
+total_roas_delta = df_check["rev_t+1_est"].sum() / df_check["cost_t+1_est"].sum() - total_roas
 
-total_rel_delta = df_check[["rev_delta_est","cost_delta_est"]].sum() / \
-    df_check[["rev_raw", "cost_raw"]].sum().values
-roas_miss = total_roas - ROI_TARGET
-roas_miss_delta = roas_miss - total_rel_delta["rev_delta_est"]
-rel_roas_miss_delta = abs(roas_miss_delta) / min(abs(roas_miss),abs(total_rel_delta["rev_delta_est"]))
+roas_miss =  ROI_TARGET - total_roas
+roas_miss_delta = roas_miss - total_roas_delta
+rel_roas_miss_delta = abs(roas_miss_delta) / min(abs(roas_miss),abs(total_roas_delta))
 
 print("AGGREGATE:\n",df_check[["rev_raw", "cost_raw", "cost_delta_est", "rev_delta_est"]].sum())
-print("RELATIVE:\n", total_rel_delta)
 import pprint
 pprint.pprint({
     "total_roas": total_roas,
-    "total_cost_delta_est": total_cost_delta_est,
-    "total_rev_delta_est": total_rev_delta_est,
+    "total_cost_delta_est": df_check["cost_delta_est"].sum(),
+    "total_rev_delta_est": df_check["rev_delta_est"].sum(),
+    "total_roas_delta_est": total_roas_delta,
     "":"",
     "ROI_TARGET": ROI_TARGET,
     "roas_miss": roas_miss,
@@ -121,11 +124,11 @@ import sys
 def PASS():     pass
 def WARN():     sys.exit(2)
 def ERROR():    sys.exit(1)
+
+# definitely warn us if we are losing money 
+if total_roas < 1: WARN()
+
 if 0    <= rel_roas_miss_delta < 0.25:  PASS()
 if 0.25 <= rel_roas_miss_delta < 1:     WARN()
 if 1 <= rel_roas_miss_delta:            ERROR()
-
-# if abs(total_cost_delta_est) < abs(total_rev_delta_est): WARN()
-
-# if total_cost_delta_est < total_rev_delta_est: ERROR()
 # %%
