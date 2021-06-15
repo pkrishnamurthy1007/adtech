@@ -345,15 +345,58 @@ CHANGED:
 DATE_WINDOW = 7
 # get rev,click,cost sums for past week
 performance_C = ["clicks",'rev','cost']
-df_bid_perf = df \
-    [(df["days_back"] <= DATE_WINDOW)] \
-    .groupby(["bid_key"]) [performance_C] .agg(sum)
+DAY = datetime.timedelta(days=1)
+def n_day_performance(df,performance_C,n=7):
+    # \
+    #     .loc[df["date"].dt.date > TODAY-n*DAY] \
+    return df \
+        .groupby("bid_key") \
+        .apply(lambda gpdf: gpdf \
+                    .set_index("date").resample('1d').sum() \
+                    [performance_C] \
+                    .reindex(pd.date_range(TODAY-90*DAY,TODAY),fill_value=0) \
+                    .rolling(f'{n}d').sum()) \
+        .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
+df_bid_perf_rolling = pd.concat((
+        n_day_performance(df,performance_C,n=n)
+        for n in [1,7,14,30]
+    ),
+    axis=1)
+df_bid_perf_rolling[performance_C] = \
+    df_bid_perf_rolling[[f"{c}_sum_{DATE_WINDOW}day" for c in performance_C]]
+df_bid_perf = df_bid_perf_rolling \
+    .loc[(slice(None), (TODAY-DAY).__str__()), :]
+
+# def n_day_performance(df, performance_C, n=7):
+#     # \
+#     #     .loc[df["date"].dt.date >= TODAY-n*DAY] \
+#     keyI = df["bid_key"].unique()
+#     dateI = pd.date_range(TODAY-90*DAY, TODAY)
+#     df = df \
+#         .set_index(["bid_key","date"]) \
+#         [performance_C] \
+#         .reindex(pd.MultiIndex.from_product(keyI,dateI),fill_value=0)
+#     return df \
+#         .groupby("bid_key") \
+#         .apply(lambda gpdf:
+#                gpdf.set_index("date").resample('1d').sum()
+#                [performance_C].iloc[-n:].sum()) \
+#         .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
+# n_day_performance(df,performance_C,n=7)
+
 # df_bid_perf = df \
 #     [(df["days_back"] <= DATE_WINDOW)] \
 #     .groupby(["bid_key",*kw_idx_C]) [["clicks",'rev','cost']] .agg(sum)
-assert df_bid_perf.__len__() == \
-    df_bid_perf.reset_index().drop_duplicates(subset=["bid_key"]).__len__()
-
+df_bid_perf_ = df \
+    [(df["date"].dt.date >= TODAY-7*DAY)] \
+    .groupby("bid_key") [["clicks",'rev','cost']] .agg(sum) \
+    .reindex(df["bid_key"].unique(),fill_value=0)
+delta = df_bid_perf_ - \
+    df_bid_perf \
+        [["clicks_sum_7day","rev_sum_7day","cost_sum_7day"]] \
+        .values
+assert all(delta.abs() < 1e-10)
+#%%
 # get latest bids for last week kws
 """
 Q: what is the `max_cpc` col in tron.intraday_profitability?
@@ -421,11 +464,10 @@ print(inherited_cpc_df)
 
 #join bids with perf data
 df_bid = pd.merge(df_bid, df_bid_perf, how="left", on=["bid_key"])
-df_bid[performance_C] = df_bid[performance_C].fillna(0)
-df_bid[[f"{c}_raw" for c in performance_C]] = df_bid[performance_C]
-df_bid .loc[df_bid["geoI"],performance_C] = \
+df_bid[[f"{c}_raw" for c in df_bid_perf.columns]] = df_bid[df_bid_perf.columns]
+df_bid .loc[df_bid["geoI"],df_bid_perf.columns] = \
     df_bid.loc[df_bid["geoI"]] \
-        .groupby(kw_idx_C) [performance_C] .transform(sum)
+        .groupby(kw_idx_C)[df_bid_perf.columns] .transform(sum)
 print("|df_bid|",df_bid.shape)
 
 #jon kw attributes
@@ -459,30 +501,17 @@ assert all(df_bid.isna().sum() == 0), df_bid.isna().sum()
 
 upsampled_rev_agg = df_bid[["geoI",*performance_C]].groupby("geoI").sum()
 rev_agg = df \
-    .loc[df["days_back"] <= DATE_WINDOW,["geoI", *performance_C]] \
+    .loc[df["date"].dt.date >= TODAY-DATE_WINDOW*DAY, 
+         ["geoI", *performance_C]] \
     .groupby("geoI").sum()
 upsample_proportions = (upsampled_rev_agg - rev_agg).abs() / rev_agg
 print("revenue upsampling broken out by geolocation bool:")
-print(upsample_proportions)
+from IPython.display import display as ipydisp
+ipydisp(upsample_proportions)
 
-assert all(upsample_proportions.loc[False] < 0.02)
+assert all(upsample_proportions.loc[False] < 0.6)
 assert all(upsample_proportions.loc[True] > 40)
 assert all(upsample_proportions.loc[True] < 60)
-#%%
-# upsampled_rev_agg = df_bid\
-#     .loc[:,[*bid_idx_C,*performance_C]] \
-#     .groupby(bid_idx_C) \
-#     [performance_C].sum()
-# rev_agg = df \
-#     .loc[df["days_back"] <= DATE_WINDOW,
-#         [*bid_idx_C,*performance_C]] \
-#     .groupby(bid_idx_C) \
-#     [performance_C].sum()
-# df_ = df.drop_duplicates(bid_idx_C)
-# df_\
-#     [~df_["geoI"]] \
-#     .groupby(kw_idx_C)[["cnt"]].count() \
-#     .sort_values("cnt")
 #%%
 # """
 # Q:
@@ -570,6 +599,7 @@ df_bid["rpc_est"] = df_bid[kw_idx_C] \
     .apply(lambda r: (slice(None), slice(None), *r), axis=1) \
     .apply(lambda kw_slc: find_rpc(df_rpc.loc[kw_slc]))
 #%%
+#%%
 """
 cpc_t = cost_t/clicks_t
 roi_t = rpc_t / cpc_t
@@ -610,15 +640,16 @@ df_bid["max_cpc_new"] = df_bid["max_cpc_new"].round(2)
 df_bid["bid_change"] = df_bid["max_cpc_new"] - df_bid["max_cpc_old"]
 
 #prepare output
-df_out = df_bid[
-    ["account", "match",
-    "campaign_id","adgroup_id","keyword_id",
-    "campaign","adgroup","keyword",
-    "clicks","rev","cost",
-    "clicks_raw", "rev_raw", "cost_raw",
-    "max_cpc_old","max_cpc_new",
-    "rpc_est","cpc_target",
-    "bid_change","perc_change"]]
+# df_out = df_bid[
+#     ["account", "match",
+#     "campaign_id","adgroup_id","keyword_id",
+#     "campaign","adgroup","keyword",
+#     "clicks","rev","cost",
+#     "clicks_raw", "rev_raw", "cost_raw",
+#     "max_cpc_old","max_cpc_new",
+#     "rpc_est","cpc_target",
+#     "bid_change","perc_change"]]
+df_out = df_bid
 df_out = df_out.rename(
     columns={
         "clicks": "clicks_kw_group",

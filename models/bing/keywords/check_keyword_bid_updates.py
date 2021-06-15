@@ -3,6 +3,7 @@ from models.bing.keywords.common import *
 import glob
 import datetime
 import pandas as pd
+import numpy as np
 
 TODAY = datetime.datetime.now().date()
 # todays_output = glob.glob(f"{OUTPUT_DIR}/**/*{TODAY}.csv")
@@ -21,30 +22,44 @@ We should have 2 records for each kw b/c we break bids out by account and write 
 but we also write the bids for all accounts.
 """
 #%%
+from IPython.display import display as ipydisp
+
 df_check = df_out
-df_check["roas"] = df_check["rev_raw"] / df_check["cost_raw"]
+
+windows = [1,7,14,30]
+clicksC = [f"clicks_sum_{n}day_raw" for n in windows]
+revC = [f"rev_sum_{n}day_raw" for n in windows]
+costC = [f"cost_sum_{n}day_raw" for n in windows]
+roasC = [f"roas_{n}day" for n in windows]
+df_check[roasC] = df_check[revC].abs() / (df_check[costC].abs().values + 1e-10)
+for c,d in zip(roasC,costC):
+    df_check.loc[df_check[d].abs() < 1e-2,c] = np.NaN
+ipydisp(df_check[clicksC+revC+costC+roasC].agg(["sum","mean"]).round(2).T)
+#%%
 df_check["change"] = df_check["max_cpc_new"]/df_check["max_cpc_old"] - 1
-df_check["cost_t+1_est"] = (df_check["change"]+1) * df_check["cost_raw"]
-df_check["rev_t+1_est"] = (df_check["change"]+1) * df_check["rev_raw"]
-df_check["cost_delta_est"] = df_check["cost_raw"] * df_check["change"]
+df_check["cost_t+1_est"] = (df_check["change"]+1) * df_check["cost_sum_7day_raw"]
+df_check["rev_t+1_est"] = (df_check["change"]+1) * df_check["rev_sum_7day_raw"]
+df_check["cost_delta_est"] = df_check["cost_sum_7day_raw"] * df_check["change"]
 # assume rpc will be unchanged - but volume will increase/decrease proportional
 #   to bid change
-df_check["rev_delta_est"] = df_check["rev_raw"] * df_check["change"]
+df_check["rev_delta_est"] = df_check["rev_sum_7day_raw"] * df_check["change"]
 
 U = df_check[["cost_t+1_est","rev_t+1_est"]]
-V = df_check[["cost_raw","rev_raw"]] + df_check[["cost_delta_est","rev_delta_est"]].values
+V = df_check[["cost_sum_7day","rev_sum_7day"]] + df_check[["cost_delta_est","rev_delta_est"]].values
 assert all((U - V.values).abs() < 1e-10)
 
-total_roas = df_check["rev_raw"].sum() / df_check["cost_raw"].sum()
+total_roas_windows = df_check[revC].sum() / df_check[costC].sum().values
+total_roas_windows = pd.Series(data=total_roas_windows.values, index=roasC)
+ipydisp(total_roas_windows)
+
+total_roas = total_roas_windows["roas_7day"]
 total_roas_delta = df_check["rev_t+1_est"].sum() / df_check["cost_t+1_est"].sum() - total_roas
 
 roas_miss =  ROI_TARGET - total_roas
 roas_miss_delta = roas_miss - total_roas_delta
 rel_roas_miss_delta = abs(roas_miss_delta) / min(abs(roas_miss),abs(total_roas_delta))
 
-print("AGGREGATE:\n",df_check[["rev_raw", "cost_raw", "cost_delta_est", "rev_delta_est"]].sum())
-import pprint
-pprint.pprint({
+ipydisp(pd.Series({
     "total_roas": total_roas,
     "total_cost_delta_est": df_check["cost_delta_est"].sum(),
     "total_rev_delta_est": df_check["rev_delta_est"].sum(),
@@ -54,32 +69,11 @@ pprint.pprint({
     "roas_miss": roas_miss,
     "roas_miss_delta": roas_miss_delta,
     "rel_roas_miss_delta": rel_roas_miss_delta,
-})
+}))
 #%%
 """
 # TODO: make sure >= 51 state kws w/ in each geo gran gp - once we start using Dans catalog tables 
 
-kw_idx_C = ["account", "geoI", "campaign_id", "adgroup_norm", "keyword_norm"]
-bid_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id"]
-match_idx_C = ["account", "geoI", "campaign_id", "adgroup_id", "keyword_id", "match"]
-df[match_idx_C].drop_duplicates().shape
-#%%
-df[kw_idx_C].drop_duplicates().shape
-#%%
-df["cnt"] = 1
-geo_gran_cnts = df \
-    [geoI] \
-    .drop_duplicates(bid_idx_C) \
-    .groupby(kw_idx_C) ["cnt"] .count() \
-    .reset_index()
-geo_gran_cnts
-#%%
-[*geo_gran_cnts["keyword_norm"]]
-#%%
-df[geoI]["adgroup_norm"].drop_duplicates()
-"""
-#%%
-"""
 WTS
 - under ROAS (ROAS < ROI_TARGET) => VOL & REV go down
 - over ROAS (ROAS > ROI_TARGET) => VOL & REV go up
