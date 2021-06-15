@@ -5,8 +5,6 @@ import datetime
 import pandas as pd
 import numpy as np
 
-# todays_output = glob.glob(f"{OUTPUT_DIR}/**/*{TODAY}.csv")
-# df_out = pd.concat((pd.read_csv(fpth) for fpth in todays_output))
 import boto3
 ls_resp = boto3.client("s3").list_objects(Bucket=S3_OUTPUT_BUCKET,Prefix=S3_OUTPUT_PREFIX)
 prev_output_keys = [o["Key"] for o in ls_resp["Contents"]]
@@ -113,15 +111,17 @@ CHECKS
     - [x] take dan off error and success notifications
 """
 
-import sys
-def PASS():     pass
-def WARN():     sys.exit(2)
-def ERROR():    sys.exit(1)
+WARN = False
+ERROR = False
 
 # definitely warn us if we are losing money 
-if total_roas < 1: WARN()
+if total_roas < 1: WARN |= True
 
-if 0    <= rel_roas_miss_delta < 0.25:  PASS()
-if 0.25 <= rel_roas_miss_delta < 1:     WARN()
-if 1 <= rel_roas_miss_delta:            ERROR()
+if 0    <= rel_roas_miss_delta < 0.25:  pass
+if 0.25 <= rel_roas_miss_delta < 1:     WARN |= True
+if 1 <= rel_roas_miss_delta:            ERROR |= True
+
+import sys
+if ERROR:   sys.exit(1)
+if WARN:    sys.exit(2)
 # %%

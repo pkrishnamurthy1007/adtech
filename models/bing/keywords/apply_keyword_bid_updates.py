@@ -30,9 +30,6 @@ bing_accnt_df = pd.DataFrame(
     columns=["account_number", "account_id"],
 )
 
-TODAY = datetime.datetime.now().date()
-# todays_output = glob.glob(f"{OUTPUT_DIR}/**/*{TODAY}.csv")
-# df_out = pd.concat((pd.read_csv(fpth) for fpth in todays_output))
 import boto3
 ls_resp = boto3.client("s3").list_objects(Bucket=S3_OUTPUT_BUCKET,Prefix=S3_OUTPUT_PREFIX)
 prev_output_keys = [o["Key"] for o in ls_resp["Contents"]]
