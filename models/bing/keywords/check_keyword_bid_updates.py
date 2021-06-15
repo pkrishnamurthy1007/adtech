@@ -5,7 +5,6 @@ import datetime
 import pandas as pd
 import numpy as np
 
-TODAY = datetime.datetime.now().date()
 # todays_output = glob.glob(f"{OUTPUT_DIR}/**/*{TODAY}.csv")
 # df_out = pd.concat((pd.read_csv(fpth) for fpth in todays_output))
 import boto3

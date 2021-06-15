@@ -15,3 +15,8 @@ OUTPUT_DIR = rscfn(__name__, "OUTPUT")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 #%%
 ROI_TARGET = 1.15  # target we are aiming
+#%%
+import pytz
+import datetime
+NOW = datetime.datetime.now(pytz.timezone('EST'))
+TODAY = NOW.date()

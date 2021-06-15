@@ -23,10 +23,6 @@ CLICKS = 120 #click threshold. level at which kw uses all of its own data
 MAX_PUSH = 0.2
 MAX_CUT = -0.3
 CPC_MIN = 0.05
-# data is reported in EST 
-NOW = datetime.datetime.now(pytz.timezone('EST'))
-TODAY = NOW.date()
-WEEKDAY = TODAY.weekday()
 
 query = f"""
 SELECT 
@@ -86,7 +82,6 @@ assert df["costI"].sum() + df["revI"].sum() == len(df)
 
 #### PROCESS DATE ####
 df['date'] = pd.to_datetime(df['date'])
-df["weekday"] = df['date'].dt.weekday
 df['today'] = TODAY
 df['days_back'] = (NOW - df['date'].dt.tz_localize("EST")).dt.days
 
