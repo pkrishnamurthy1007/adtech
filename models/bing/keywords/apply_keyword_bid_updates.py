@@ -43,6 +43,7 @@ assert df_out.__len__() * 2 == old_len, """
 We should have 2 records for each kw b/c we break bids out by account and write them,
 but we also write the bids for all accounts.
 """
+TODAY
 #%%
 from api.bingads.bingapi.client import *
 
@@ -77,5 +78,4 @@ for accnt in df_out["account"].unique():
     keyword_updates = accnt_client.bulk_update_keyword_bids(adgroup_ids,keyword_ids,keyword_bids)
     keyword_bid_updates = [kwu.keyword.Bid.Amount for kwu in keyword_updates]
     assert all(np.array(sorted(keyword_bid_updates)) == np.array(sorted(keyword_bids)))
-
 # %%

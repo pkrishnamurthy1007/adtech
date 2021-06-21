@@ -392,6 +392,8 @@ delta = df_bid_perf_ - \
         .values
 assert all(delta.abs() < 1e-10)
 #%%
+
+#%%
 # get latest bids for last week kws
 """
 Q: what is the `max_cpc` col in tron.intraday_profitability?
