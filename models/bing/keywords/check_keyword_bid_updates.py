@@ -118,8 +118,8 @@ ERROR = False
 if total_roas < 1: WARN |= True
 
 if 0    <= rel_roas_miss_delta < 0.25:  pass
-if 0.25 <= rel_roas_miss_delta < 1:     WARN |= True
-if 1 <= rel_roas_miss_delta:            ERROR |= True
+if 0.25 <= rel_roas_miss_delta < 2:     WARN |= True
+if 2 <= rel_roas_miss_delta:            ERROR |= True
 
 import sys
 if ERROR:   sys.exit(1)
