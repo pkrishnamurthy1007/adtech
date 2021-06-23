@@ -346,7 +346,7 @@ def view_create():
             a.duration_sold,
             a.duration_inforce,
             a.is_prepaid,
-            (a.duration_inforce::NUMERIC / a.duration_sold::NUMERIC)::NUMERIC(5,4) AS inforce_percent,
+            (a.duration_inforce::NUMERIC / a.duration_sold::NUMERIC)::NUMERIC(10,4) AS inforce_percent,
             a.premium_health,
             a.premium_rider,
             a.premium_dental,

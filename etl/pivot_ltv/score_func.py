@@ -28,7 +28,7 @@ def predict_duration_percent(plan_length_group, age, sold_month, has_vision=Fals
         if sold_month in [1, 3, 7, 8]: output += -0.0109
         if sold_month in [2, 5, 6]: output += -0.0342
 
-    if plan_length_group == 90:
+    if plan_length_group == 180:
         """
         has_vision                -0.0849
         primary_age                0.0018
