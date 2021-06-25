@@ -113,11 +113,6 @@ dfagg = reporting_df \
 dfagg["rev_7day"] = dfagg["rev"].rolling(7).mean()
 dfagg_norm = (dfagg / dfagg.mean())
 
-# dfagg_norm[["max_cpc","rev_7day"]].plot()
-# from matplotlib import pyplot as plt
-# plt.title(f"mean normalized 7-day rolling rev and reported max_cpc")
-# plt.show()
-
 # # requires `gnuplot` which may not be available on gh action server
 # import termplotlib
 # termplotlib.plot.plot(bucket_rps_df["rps_avg_true"].fillna(0),bucket_rps_df["rps_avg_true"].index)
@@ -126,13 +121,14 @@ dfagg_norm = (dfagg / dfagg.mean())
 # import plotext
 # plotext.plot([dfagg_norm["max_cpc"], dfagg_norm["rev_7day"]], dfagg_norm.index)
 # plotext.title(f"mean normalized 7-day rolling rev and reported max_cpc")
-# plotext.show()
+# plotext.plotsize(100,30)
+# plotext.show()    
 
 import uniplot
 uniplot.plot([dfagg_norm["max_cpc"],dfagg_norm["rev_7day"]],
              legend_labels=["max_cpc","rev_7day"],
-             title=f"mean normalized 7-day rolling rev and reported max_cpc")
-
+             title=f"mean normalized 7-day rolling rev and reported max_cpc",
+             width=90,height=15)
 #%%
 ### CREATE SEPARATE GROUPINGS FOR GEO-GRANULAR ADGROUPS AND KEYWORDS ###
 """
@@ -260,6 +256,17 @@ DATE_WINDOW = 7
 # get rev,click,cost sums for past week
 performance_C = ["clicks",'rev','cost']
 DAY = datetime.timedelta(days=1)
+# def n_day_performance(df,performance_C,n=7):
+#     # \
+#     #     .loc[df["date"].dt.date > TODAY-n*DAY] \
+#     return df \
+#         .groupby("bid_key") \
+#         .apply(lambda gpdf: gpdf \
+#                     .set_index("date").resample('1d').sum() \
+#                     [performance_C] \
+#                     .reindex(pd.date_range(TODAY-90*DAY,TODAY),fill_value=0) \
+#                     .rolling(f'{n}d').sum()) \
+#         .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
 def n_day_performance(df,performance_C,n=7):
     # \
     #     .loc[df["date"].dt.date > TODAY-n*DAY] \
@@ -273,7 +280,7 @@ def n_day_performance(df,performance_C,n=7):
         .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
 df_bid_perf_rolling = pd.concat((
         n_day_performance(reporting_df,performance_C,n=n)
-        for n in [1,7,14,30]
+        for n in [1,3,7,14,30]
     ),
     axis=1)
 df_bid_perf_rolling[performance_C] = \
@@ -290,7 +297,20 @@ delta = df_bid_perf_ - \
         [["clicks_sum_7day","rev_sum_7day","cost_sum_7day"]] \
         .values
 assert all(delta.abs() < 1e-10)
+
 ipydisp(df_bid_perf.sum())
+df_bid_perf_rolling.index.names = ["bid_key","date"]
+agg_df_bid_perf_rolling = df_bid_perf_rolling.groupby("date").sum()
+revC = [c for c in df_bid_perf.columns if c.startswith("rev_sum")]
+costC = [c for c in df_bid_perf.columns if c.startswith("cost_sum")]
+roasC = ["roas"+c.strip("rev_sum") for c in revC]
+rolling_agg_roas_df = agg_df_bid_perf_rolling[revC] / agg_df_bid_perf_rolling[costC].values
+rolling_agg_roas_df.columns = roasC
+uniplot.plot(
+    [rolling_agg_roas_df[c].fillna(1) for c in roasC[1:]],
+    legend_labels=roasC[1:],
+    title=f"rolline 3,7,14,30 day roas",
+    width=90, height=20)
 #%%
 df_bid = reporting_df[["bid_key",
                         "account_id", "account_num", "match",
@@ -306,8 +326,13 @@ df_bid = pd.merge(df_bid, df_bid_perf, how="left", on=["bid_key"],suffixes=("","
 df_bid = df_bid.fillna(0)
 print("|df_bid|",df_bid.shape)
 
+# agg-transform performance data accross geo gran keyword groups
+df_bid .loc[df_bid["geoI"],df_bid_perf.columns] = \
+    df_bid.loc[df_bid["geoI"]] \
+        .groupby(kw_gp_idx_C)[df_bid_perf.columns] .transform(sum)
+
 df_bid["clicks_in_window"] = df_bid["clicks"] > 0
-#keep only kws with clicks last week
+#keep only kws with clicks in aggregation window
 df_bid = df_bid[df_bid["clicks"] > 0]
 print("|df_bid|", df_bid.shape)
 
@@ -358,10 +383,9 @@ df_rpc[["clicks_act","rev_act"]] = df_rpc \
 
 #### FIND DECAY MULTIPLIER ####
 decay_factor = 0.03 
-days_back = (TODAY - df_rpc.index.get_level_values("date")).days()
-df_rpc["decay_multiplier"] = np.exp(-decay_factor * days_back)
-df_rpc["decay_multiplier"]
-#%%
+days_back = (TODAY - df_rpc.reset_index()["date"].dt.date).dt.days
+df_rpc["decay_multiplier"] = np.exp(-decay_factor * days_back.values)
+
 """
 TODO:
 Q: how to deal w/ bid trap prpbolem?
