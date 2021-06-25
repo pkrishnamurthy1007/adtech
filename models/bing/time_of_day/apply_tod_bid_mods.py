@@ -20,11 +20,6 @@ logging.basicConfig(level=LOGLEVEL)
 # logging.getLogger('suds.transport.http').setLevel(logging.DEBUG)
 
 bing_creds = json.loads(os.getenv("BING_CREDS"))
-
-# from ds_utils.db.connectors import HealthcareDW,AnalyticsDB
-# with AnalyticsDB() as db:
-#     bing_accnt_df = db.to_df("select * from dev_ent_d1_gold.adtech.bingads.account")
-# bing_accnt_df
 bing_accnt_df = pd.DataFrame(
     [
         ["B013P57C", "43030867"],
@@ -76,7 +71,7 @@ for accnt_id in bing_accnt_df["account_id"].unique():
 #%%
 
 assert df_out.__len__() * 2 == old_len, """
-We should have 2 records for each kw b/c we break bids out by account and write them,
+We should have 2 records for each kw b/c we break bids out by account_id and write them,
 but we also write the bids for all accounts.
 """
 #%%

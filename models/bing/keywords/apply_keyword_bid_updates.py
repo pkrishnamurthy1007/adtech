@@ -1,4 +1,6 @@
 #%%
+raise Exception("Unable to complete update to use keyword catalog tables - preventing bid updates")
+#%%
 import json
 import logging
 import os
@@ -19,7 +21,7 @@ bing_creds = json.loads(os.getenv("BING_CREDS"))
 
 # from ds_utils.db.connectors import HealthcareDW,AnalyticsDB
 # with AnalyticsDB() as db:
-#     bing_accnt_df = db.to_df("select * from dev_ent_d1_gold.adtech.bingads.account")
+#     bing_accnt_df = db.to_df("select * from dev_ent_d1_gold.adtech.bingads.account_id")
 # bing_accnt_df
 bing_accnt_df = pd.DataFrame(
     [
@@ -40,20 +42,16 @@ df_out = pd.concat(todays_output)
 old_len = df_out.__len__()
 df_out = df_out.drop_duplicates() 
 assert df_out.__len__() * 2 == old_len, """
-We should have 2 records for each kw b/c we break bids out by account and write them,
+We should have 2 records for each kw b/c we break bids out by account_id and write them,
 but we also write the bids for all accounts.
 """
 TODAY
 #%%
 from api.bingads.bingapi.client import *
 
-for accnt in df_out["account"].unique():
-    print(f"Updating bids for account# `{accnt}`")
-
-    accnt_id = bing_accnt_df \
-        .set_index("account_number").loc[accnt, "account_id"]
-    accntI = df_out["account"] == accnt
-    print(f"Got id `{accnt_id}` for account# `{accnt}`")
+for accnt_id in df_out["account_id"].unique():
+    print(f"Updating bids for account_id `{accnt_id}`")
+    accntI = df_out["account_id"] == accnt_id
     accnt_client = BingClient(
         account_id=accnt_id,
         customer_id=bing_creds['BING_CUSTOMER_ID'],
