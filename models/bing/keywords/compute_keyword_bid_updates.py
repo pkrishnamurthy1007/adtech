@@ -275,7 +275,6 @@ def n_day_performance(df,performance_C,n=7):
         .apply(lambda gpdf: gpdf \
                     .set_index("date").resample('1d').sum() \
                     [performance_C] \
-                    .reindex(pd.date_range(TODAY-90*DAY,TODAY),fill_value=0) \
                     .rolling(f'{n}d').sum()) \
         .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
 df_bid_perf_rolling = pd.concat((
@@ -368,7 +367,7 @@ assert all(upsample_proportions.loc[True] < 60)
 # simplify df
 df_rpc = reporting_df \
     .groupby(["date","match",*kw_gp_idx_C]) \
-    ["clicks","rev","cost"] \
+    [["clicks","rev","cost"]] \
     .sum()
 #find adg, campaign level data for rpc estimation
 df_rpc[["clicks_adg", "rev_adg"]] = df_rpc \

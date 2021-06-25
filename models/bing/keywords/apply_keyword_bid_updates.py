@@ -47,7 +47,7 @@ TODAY
 #%%
 from api.bingads.bingapi.client import *
 
-for accnt_id in df_out["account_id"].unique():
+for accnt_id in df_out["account_id"].astype(int).unique():
     print(f"Updating bids for account_id `{accnt_id}`")
     accntI = df_out["account_id"] == accnt_id
     accnt_client = BingClient(
