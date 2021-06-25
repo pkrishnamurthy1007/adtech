@@ -1,6 +1,4 @@
 #%%
-raise Exception("Unable to complete update to use keyword catalog tables - preventing bid updates")
-#%%
 import json
 import logging
 import os
