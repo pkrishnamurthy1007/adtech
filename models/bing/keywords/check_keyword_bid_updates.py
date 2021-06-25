@@ -15,7 +15,7 @@ df_out = pd.concat(todays_output)
 old_len = df_out.__len__()
 df_out = df_out.drop_duplicates() 
 assert df_out.__len__() * 2 == old_len, """
-We should have 2 records for each kw b/c we break bids out by account and write them,
+We should have 2 records for each kw b/c we break bids out by account_id and write them,
 but we also write the bids for all accounts.
 """
 #%%
@@ -102,7 +102,7 @@ CHECKS
 - TODO
     - want COST_delta ~= REV_delta
     - want in gh action readout:
-        - ROAS stuff split out by account
+        - ROAS stuff split out by account_id
         - yesterday ROAS - 7 day ,30 day 
     - slack notif
         - gsheets
@@ -118,8 +118,8 @@ ERROR = False
 if total_roas < 1: WARN |= True
 
 if 0    <= rel_roas_miss_delta < 0.25:  pass
-if 0.25 <= rel_roas_miss_delta < 1:     WARN |= True
-if 1 <= rel_roas_miss_delta:            ERROR |= True
+if 0.25 <= rel_roas_miss_delta < 2:     WARN |= True
+if 2 <= rel_roas_miss_delta:            ERROR |= True
 
 import sys
 if ERROR:   sys.exit(1)
