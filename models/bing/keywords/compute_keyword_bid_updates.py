@@ -323,13 +323,13 @@ print("|df_bid|", df_bid.shape)
 
 #jon kw attributes
 df_bid = pd.merge(df_bid, df_bid_perf, how="left", on=["bid_key"],suffixes=("","_"))
-df_bid = df_bid.fillna(0)
-print("|df_bid|",df_bid.shape)
-
+df_bid[[f"{c}_raw" for c in df_bid_perf.columns]] = df_bid[df_bid_perf.columns]
 # agg-transform performance data accross geo gran keyword groups
 df_bid .loc[df_bid["geoI"],df_bid_perf.columns] = \
     df_bid.loc[df_bid["geoI"]] \
         .groupby(kw_gp_idx_C)[df_bid_perf.columns] .transform(sum)
+df_bid = df_bid.fillna(0)
+print("|df_bid|",df_bid.shape)
 
 df_bid["clicks_in_window"] = df_bid["clicks"] > 0
 #keep only kws with clicks in aggregation window
