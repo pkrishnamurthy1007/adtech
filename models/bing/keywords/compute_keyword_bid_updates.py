@@ -317,6 +317,7 @@ df_bid[[f"{c}_raw" for c in df_bid_perf.columns]] = df_bid[df_bid_perf.columns]
 df_bid .loc[df_bid["geoI"],df_bid_perf.columns] = \
     df_bid.loc[df_bid["geoI"]] \
         .groupby(kw_gp_idx_C)[df_bid_perf.columns] .transform(sum)
+df_bid["latest_max_cpc"] = df_bid["latest_max_cpc"].fillna(df_bid["latest_max_cpc"].mean())
 df_bid = df_bid.fillna(0)
 print("|df_bid|",df_bid.shape)
 
