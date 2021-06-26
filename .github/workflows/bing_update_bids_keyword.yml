@@ -16,8 +16,8 @@ jobs:
   update-keyword-bids:
     runs-on: ubuntu-latest
     env:
-      # SLACK_CHANNEL: alert-test
-      SLACK_CHANNEL: adtech-alerts
+      SLACK_CHANNEL: alert-test
+      # SLACK_CHANNEL: adtech-alerts
       CHANNEL_SID: '!channel'
       AMAL_SID: '@U01PPS0BLKY'
       CURTIS_SID: '@U01MYTF7X18'

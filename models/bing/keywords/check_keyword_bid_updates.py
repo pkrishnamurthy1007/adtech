@@ -23,7 +23,7 @@ from IPython.display import display as ipydisp
 
 df_check = df_out
 
-windows = [1,7,14,30]
+windows = [1,3,7,14,30]
 clicksC = [f"clicks_sum_{n}day_raw" for n in windows]
 revC = [f"rev_sum_{n}day_raw" for n in windows]
 costC = [f"cost_sum_{n}day_raw" for n in windows]
@@ -32,7 +32,8 @@ df_check[roasC] = df_check[revC].abs() / (df_check[costC].abs().values + 1e-10)
 for c,d in zip(roasC,costC):
     df_check.loc[df_check[d].abs() < 1e-2,c] = np.NaN
 ipydisp(df_check[clicksC+revC+costC+roasC].agg(["sum","mean"]).round(2).T)
-#%%
+
+df_check["max_cpc_old"] = np.maximum(df_check["max_cpc_old"],0.05)
 df_check["change"] = df_check["max_cpc_new"]/df_check["max_cpc_old"] - 1
 df_check["cost_t+1_est"] = (df_check["change"]+1) * df_check["cost_sum_7day_raw"]
 df_check["rev_t+1_est"] = (df_check["change"]+1) * df_check["rev_sum_7day_raw"]
@@ -69,8 +70,6 @@ ipydisp(pd.Series({
 }))
 #%%
 """
-# TODO: make sure >= 51 state kws w/ in each geo gran gp - once we start using Dans catalog tables 
-
 WTS
 - under ROAS (ROAS < ROI_TARGET) => VOL & REV go down
 - over ROAS (ROAS > ROI_TARGET) => VOL & REV go up
