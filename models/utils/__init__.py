@@ -30,7 +30,25 @@ def ema(S, window) -> typing.Iterable:
 
 def wavg(V, W):
     if W.sum() == 0:return 0
-    return (V*W).sum() / W.sum()
+    if V.shape.__len__() > 1:
+        return (V*W.values.reshape(-1,1)).sum() / W.sum()
+    else:
+        return (V*W).sum() / W.sum()
+def wvar(V,W):
+    mu = wavg(V,W)
+    var = wavg((V - mu)**2,W)
+    return var
+def wstd(V,W):
+    return wvar(V,W)**0.5
+def get_wavg_by(df, col):
+    def wavg_by(V):
+        return wavg(V, W=df.loc[V.index, col])
+    return wavg_by
+def get_wstd_by(df, col):
+    def wstd_by(V):
+        return wstd(V, W=df.loc[V.index, col])
+    return wstd_by
+
 def lapprox(X, W, l, r):
     return X[l]
 def midapprox(X, W, l, r):
