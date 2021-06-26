@@ -256,17 +256,6 @@ DATE_WINDOW = 7
 # get rev,click,cost sums for past week
 performance_C = ["clicks",'rev','cost']
 DAY = datetime.timedelta(days=1)
-# def n_day_performance(df,performance_C,n=7):
-#     # \
-#     #     .loc[df["date"].dt.date > TODAY-n*DAY] \
-#     return df \
-#         .groupby("bid_key") \
-#         .apply(lambda gpdf: gpdf \
-#                     .set_index("date").resample('1d').sum() \
-#                     [performance_C] \
-#                     .reindex(pd.date_range(TODAY-90*DAY,TODAY),fill_value=0) \
-#                     .rolling(f'{n}d').sum()) \
-#         .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
 def n_day_performance(df,performance_C,n=7):
     # \
     #     .loc[df["date"].dt.date > TODAY-n*DAY] \
@@ -275,6 +264,7 @@ def n_day_performance(df,performance_C,n=7):
         .apply(lambda gpdf: gpdf \
                     .set_index("date").resample('1d').sum() \
                     [performance_C] \
+                    .reindex(pd.date_range(TODAY-90*DAY,TODAY),fill_value=0) \
                     .rolling(f'{n}d').sum()) \
         .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
 df_bid_perf_rolling = pd.concat((

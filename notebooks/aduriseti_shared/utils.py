@@ -12,6 +12,9 @@ def fetch_head(rsc,limit=1000,src=HealthcareDW):
     return db
 #%%
 import datetime
+from models.data.queries.lead_score import \
+    SCHEMA as DS_SCHEMA, \
+    SCORE_TABLE
 def get_unified_session_sql(start_date,end_date,product,traffic_source):
     start_date = start_date.date() if isinstance(start_date,datetime.datetime) else start_date
     end_date = end_date.date() if isinstance(end_date,datetime.datetime) else end_date
@@ -229,3 +232,83 @@ def agg_rps(start_date,end_date,product,traffic_source,agg_columns):
     df['int_ix'] = range(len(df))
 
     return df
+#%%
+from models.utils import wavg,get_wavg_by
+taboola_val_map = {
+    "device": {
+        'DESKTOP': 'DESK',
+        'MOBILE': 'PHON',
+        'TABLET': 'TBLT',
+    },
+    "operating_system": {
+        "Linux": "Linux",
+        'Linux armv7l': "Linux",
+        'Linux armv8l': "Linux",
+        'Linux x86_64': "Linux",
+        'MacIntel': 'Mac OS X',
+        'Win32': "Windows",
+        'iPad': "iPadOS",
+        'iPhone': "iOS",
+        '': None,
+        'ARM': None,
+        'Android': 'Android',
+        'Linux aarch64': "Linux",
+        'Win64': "Windows",
+        'Linux armv7': "Linux",
+        'Linux i686': "Linux",
+        'Windows': "Windows",
+        "iPod touch": "iOS",
+    }
+}
+
+def translate_taboola_vals(df):
+    index_cols = df.index.names
+    df = df.reset_index()
+    for c in df.columns:
+        if c in taboola_val_map:
+            df[c] = df[c] \
+                .map(taboola_val_map[c]) \
+                .combine_first(df[c])
+    df_bkp = df
+    df = df \
+        .groupby(index_cols) \
+        .agg({
+            "sessions": sum,
+            "num_leads": sum,
+            "lps_avg": get_wavg_by(df,"sessions"),
+            "rpl_avg": get_wavg_by(df,"sessions"),
+            "rps_avg": get_wavg_by(df,"sessions"),
+        })
+    df["int_ix"] = range(len(df))
+    df_bkp_wavg = wavg(df_bkp[["lps_avg","rpl_avg","rps_avg"]],
+                        df_bkp["sessions"].values.reshape(-1, 1))
+    df_wavg = wavg(df[["lps_avg","rpl_avg","rps_avg"]],
+                    df["sessions"].values.reshape(-1, 1))
+    assert all((df_bkp_wavg - df_wavg).abs() < 1e-2), (df_bkp_wavg,df_wavg)
+    return df
+
+def agg_rps_taboola(start_date, end_date, product, traffic_source, agg_columns):
+    rps_df = agg_rps(start_date, end_date, product,
+                     traffic_source, agg_columns)
+    rps_df = translate_taboola_vals(rps_df)
+    return rps_df
+#%%
+GOOGLE = "GOOGLE"
+BING = "BING"
+PERFORMMEDIA = "PERFORMMEDIA"
+MEDIAALPHA = "MEDIAALPHA"
+FACEBOOK = "FACEBOOK"
+SUREHITS = "SUREHITS"
+TABOOLA = "TABOOLA"
+YAHOO = "YAHOO"
+MAJOR_TRAFFIC_SOURCES = [
+    GOOGLE,BING,PERFORMMEDIA,MEDIAALPHA,FACEBOOK,
+#     SUREHITS,
+    TABOOLA,
+#     YAHOO,
+]
+#%%
+U65 = "HEALTH"
+O65 = 'MEDICARE'
+PRODUCTS = [U65,O65]
+#%%
