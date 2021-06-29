@@ -11,6 +11,7 @@ def fetch_head(rsc,limit=1000,src=HealthcareDW):
             .to_csv(f"{TABLE_DUMPS}/{src.__name__}.{rsc}.csv")
     return db
 #%%
+import functools
 import datetime
 from models.data.queries.lead_score import \
     SCHEMA as DS_SCHEMA, \
@@ -270,20 +271,19 @@ def translate_taboola_vals(df):
                 .map(taboola_val_map[c]) \
                 .combine_first(df[c])
     df_bkp = df
+    avgC = ["lps_avg","rpl_avg","rps_avg", 
+            "score_null_avg", "score_adv_avg", "score_supp_avg",]
     df = df \
         .groupby(index_cols) \
         .agg({
+            "revenue": sum,
             "sessions": sum,
             "num_leads": sum,
-            "lps_avg": get_wavg_by(df,"sessions"),
-            "rpl_avg": get_wavg_by(df,"sessions"),
-            "rps_avg": get_wavg_by(df,"sessions"),
+            **{c: get_wavg_by(df, "sessions") for c in avgC},
         })
     df["int_ix"] = range(len(df))
-    df_bkp_wavg = wavg(df_bkp[["lps_avg","rpl_avg","rps_avg"]],
-                        df_bkp["sessions"].values.reshape(-1, 1))
-    df_wavg = wavg(df[["lps_avg","rpl_avg","rps_avg"]],
-                    df["sessions"].values.reshape(-1, 1))
+    df_bkp_wavg = wavg(df_bkp[avgC],df_bkp["sessions"])
+    df_wavg = wavg(df[avgC],df["sessions"])
     assert all((df_bkp_wavg - df_wavg).abs() < 1e-2), (df_bkp_wavg,df_wavg)
     return df
 
