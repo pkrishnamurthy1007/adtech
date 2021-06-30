@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from api.bingads.bingapi.client import BingClient,LocalAuthorizationData
 from models.bing.keywords.common import *
-#%%
+
 # Debug requests and responses
 LOGLEVEL = logging.WARN
 logging.basicConfig(level=LOGLEVEL)

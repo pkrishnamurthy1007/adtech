@@ -245,18 +245,13 @@ bad_kws = geo_gran_kw_cnts \
     .reset_index() ["keyword_norm"] 
 assert all(bad_kws.str.count(STATE_TAG) > 1)
 
-# df["bid_key"] = df.groupby(bid_idx_C).ngroup()
-df_bid_unique = reporting_df[kw_idx_C].drop_duplicates()
-df_bid_unique["bid_key"] = range(len(df_bid_unique))
-reporting_df = pd.merge(reporting_df,df_bid_unique,on=kw_idx_C,suffixes=("_",""))
-assert reporting_df[kw_idx_C].drop_duplicates().__len__() == \
-    reporting_df["bid_key"].drop_duplicates().__len__()
+reporting_df["bid_key"] = reporting_df["keyword_id"]
 #%%
 DATE_WINDOW = 7
 # get rev,click,cost sums for past week
 performance_C = ["clicks",'rev','cost']
 DAY = datetime.timedelta(days=1)
-def n_day_performance(df,performance_C,n=7):
+def n_day_performance_rolling(df,performance_C,n=7):
     # \
     #     .loc[df["date"].dt.date > TODAY-n*DAY] \
     return df \
@@ -268,7 +263,7 @@ def n_day_performance(df,performance_C,n=7):
                     .rolling(f'{n}d').sum()) \
         .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
 df_bid_perf_rolling = pd.concat((
-        n_day_performance(reporting_df,performance_C,n=n)
+        n_day_performance_rolling(reporting_df,performance_C,n=n)
         for n in [1,3,7,14,30]
     ),
     axis=1)
@@ -276,6 +271,19 @@ df_bid_perf_rolling[performance_C] = \
     df_bid_perf_rolling[[f"{c}_sum_{DATE_WINDOW}day" for c in performance_C]]
 df_bid_perf = df_bid_perf_rolling \
     .loc[(slice(None), (TODAY-DAY).__str__()), :]
+#%%
+def n_day_performance(df,performance_C,n=7):
+    return df \
+        [df["date"].dt.date >= TODAY - n*DAY] \
+        .groupby("bid_key") [performance_C] \
+        .sum() \
+        .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
+df_bid_perf = pd.concat((
+        n_day_performance(reporting_df,performance_C,n=n)
+        for n in [1,3,7,14,30]
+    ),
+    axis=1) \
+    .reindex(reporting_df["bid_key"].unique(), fill_value=0)
 
 df_bid_perf_ = reporting_df \
     [(reporting_df["date"].dt.date >= TODAY-7*DAY)] \
@@ -286,20 +294,6 @@ delta = df_bid_perf_ - \
         [["clicks_sum_7day","rev_sum_7day","cost_sum_7day"]] \
         .values
 assert all(delta.abs() < 1e-10)
-
-ipydisp(df_bid_perf.sum())
-df_bid_perf_rolling.index.names = ["bid_key","date"]
-agg_df_bid_perf_rolling = df_bid_perf_rolling.groupby("date").sum()
-revC = [c for c in df_bid_perf.columns if c.startswith("rev_sum")]
-costC = [c for c in df_bid_perf.columns if c.startswith("cost_sum")]
-roasC = ["roas"+c.strip("rev_sum") for c in revC]
-rolling_agg_roas_df = agg_df_bid_perf_rolling[revC] / agg_df_bid_perf_rolling[costC].values
-rolling_agg_roas_df.columns = roasC
-uniplot.plot(
-    [rolling_agg_roas_df[c].fillna(1) for c in roasC[1:]],
-    legend_labels=roasC[1:],
-    title=f"rolline 3,7,14,30 day roas",
-    width=90, height=20)
 #%%
 df_bid = reporting_df[["bid_key",
                         "account_id", "account_num", "match",
