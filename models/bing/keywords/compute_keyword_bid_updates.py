@@ -103,15 +103,18 @@ reporting_df['date'] = pd.to_datetime(reporting_df['date']) \
 reporting_df["date"] = pd.to_datetime(reporting_df["date"])
 reporting_df['today'] = TODAY
 
-# TODO: get some plots going
-dfagg = reporting_df \
-    [["date", "max_cpc", "rev"]] \
-    .groupby("date") \
-    [["max_cpc","rev"]] \
-    .mean() \
-    .sort_index()
-dfagg["rev_7day"] = dfagg["rev"].rolling(7).mean()
-dfagg_norm = (dfagg / dfagg.mean())
+### PLOT ROLLING KPIS ###
+kpiC = ["rev","cost","clicks","max_cpc"]
+date_kpi_df = reporting_df .groupby("date") [kpiC].sum()
+date_kpi_df["ROAS"] = date_kpi_df["rev"] / date_kpi_df["cost"]
+kpiC += ["ROAS"]
+for n in [3,7,14,30]:
+    rolling_kpi_C = [f"{c}_{n}d_avg" for c in kpiC]
+    date_kpi_df[rolling_kpi_C] = date_kpi_df[kpiC].rolling(n).mean()
+    (date_kpi_df[rolling_kpi_C] / date_kpi_df[rolling_kpi_C].mean()).iloc[:,:-1].plot()
+
+roasC = [c for c in date_kpi_df.columns if c.startswith("ROAS")]
+date_kpi_df[roasC[1:]].plot()
 
 # # requires `gnuplot` which may not be available on gh action server
 # import termplotlib
@@ -125,9 +128,9 @@ dfagg_norm = (dfagg / dfagg.mean())
 # plotext.show()    
 
 import uniplot
-uniplot.plot([dfagg_norm["max_cpc"],dfagg_norm["rev_7day"]],
-             legend_labels=["max_cpc","rev_7day"],
-             title=f"mean normalized 7-day rolling rev and reported max_cpc",
+uniplot.plot([*date_kpi_df[roasC[1:]].fillna(1).values.T],
+             legend_labels=roasC[1:],
+             title=f"rolling ROAS",
              width=90,height=15)
 #%%
 ### CREATE SEPARATE GROUPINGS FOR GEO-GRANULAR ADGROUPS AND KEYWORDS ###
@@ -226,6 +229,8 @@ assert all(reporting_df.loc[geoI,"adgroup_norm"].str.contains(STATE_TAG))
 # TODO: assign most recent campaign/adgroup/kw str to each respective id
 #   - write check to determine if that then makes grouping by str less
 #       granular than grouping by id
+# TODO: why are some keyword_ids both geo-gran and not?
+#   - guessing this has something to do w/ changes to adgroup & campaign names
 camp_idx_C = ["account_id", "geoI", "campaign_id"]
 adgp_idx_C = ["account_id", "geoI", "campaign_id", "adgroup_norm"]
 kw_gp_idx_C = ["account_id", "geoI", "campaign_id", "adgroup_norm", "keyword_norm"]
@@ -245,69 +250,36 @@ bad_kws = geo_gran_kw_cnts \
     .reset_index() ["keyword_norm"] 
 assert all(bad_kws.str.count(STATE_TAG) > 1)
 
-# df["bid_key"] = df.groupby(bid_idx_C).ngroup()
-df_bid_unique = reporting_df[kw_idx_C].drop_duplicates()
-df_bid_unique["bid_key"] = range(len(df_bid_unique))
-reporting_df = pd.merge(reporting_df,df_bid_unique,on=kw_idx_C,suffixes=("_",""))
-assert reporting_df[kw_idx_C].drop_duplicates().__len__() == \
-    reporting_df["bid_key"].drop_duplicates().__len__()
+# reporting_df["bid_key"] = reporting_df[kw_idx_C].apply(tuple,axis=1).apply(str)
+reporting_df["bid_key"] = reporting_df["keyword_id"]
 #%%
 DATE_WINDOW = 7
 # get rev,click,cost sums for past week
 performance_C = ["clicks",'rev','cost']
 DAY = datetime.timedelta(days=1)
 def n_day_performance(df,performance_C,n=7):
-    # \
-    #     .loc[df["date"].dt.date > TODAY-n*DAY] \
     return df \
-        .groupby("bid_key") \
-        .apply(lambda gpdf: gpdf \
-                    .set_index("date").resample('1d').sum() \
-                    [performance_C] \
-                    .reindex(pd.date_range(TODAY-90*DAY,TODAY),fill_value=0) \
-                    .rolling(f'{n}d').sum()) \
+        [df["date"].dt.date >= TODAY - n*DAY] \
+        .groupby("bid_key") [performance_C] \
+        .sum() \
         .rename(columns={c: f"{c}_sum_{n}day" for c in performance_C})
-df_bid_perf_rolling = pd.concat((
+df_bid_perf = pd.concat((
         n_day_performance(reporting_df,performance_C,n=n)
         for n in [1,3,7,14,30]
     ),
     axis=1)
-df_bid_perf_rolling[performance_C] = \
-    df_bid_perf_rolling[[f"{c}_sum_{DATE_WINDOW}day" for c in performance_C]]
-df_bid_perf = df_bid_perf_rolling \
-    .loc[(slice(None), (TODAY-DAY).__str__()), :]
-
-df_bid_perf_ = reporting_df \
-    [(reporting_df["date"].dt.date >= TODAY-7*DAY)] \
-    .groupby("bid_key") [["clicks",'rev','cost']] .agg(sum) \
-    .reindex(reporting_df["bid_key"].unique(),fill_value=0)
-delta = df_bid_perf_ - \
-    df_bid_perf \
-        [["clicks_sum_7day","rev_sum_7day","cost_sum_7day"]] \
-        .values
-assert all(delta.abs() < 1e-10)
-
+df_bid_perf[performance_C] = \
+    df_bid_perf[[f"{c}_sum_{DATE_WINDOW}day" for c in performance_C]]
+df_bid_perf.index.name = "bid_key"
 ipydisp(df_bid_perf.sum())
-df_bid_perf_rolling.index.names = ["bid_key","date"]
-agg_df_bid_perf_rolling = df_bid_perf_rolling.groupby("date").sum()
-revC = [c for c in df_bid_perf.columns if c.startswith("rev_sum")]
-costC = [c for c in df_bid_perf.columns if c.startswith("cost_sum")]
-roasC = ["roas"+c.strip("rev_sum") for c in revC]
-rolling_agg_roas_df = agg_df_bid_perf_rolling[revC] / agg_df_bid_perf_rolling[costC].values
-rolling_agg_roas_df.columns = roasC
-uniplot.plot(
-    [rolling_agg_roas_df[c].fillna(1) for c in roasC[1:]],
-    legend_labels=roasC[1:],
-    title=f"rolline 3,7,14,30 day roas",
-    width=90, height=20)
-#%%
+
 df_bid = reporting_df[["bid_key",
                         "account_id", "account_num", "match",
                         "campaign_id", 'adgroup_id', "keyword_id",
                         "campaign", "adgroup", "keyword",
                         "adgroup_norm", "keyword_norm", 'geoI',
                         "max_cpc", "latest_max_cpc", ]] \
-    .drop_duplicates(subset=["bid_key"])
+    .drop_duplicates(subset=["bid_key"],keep="last")
 print("|df_bid|", df_bid.shape)
 
 #jon kw attributes
@@ -333,11 +305,6 @@ I = reporting_df.groupby("campaign")["geoI"].sum() > 0
 print("portion of campaigns that are geo-granular:",I.mean())
 print("portion of bid updates that are geo_granular:",df_bid["geoI"].mean())
 
-# NOTE: think this check is not needed anymore
-# # make sure that a `bid_key` is either geo granular or not 
-assert reporting_df[["bid_key", "geoI"]].drop_duplicates().__len__() == \
-    reporting_df.drop_duplicates(subset=["bid_key"]).__len__()
-
 assert all(df_bid.isna().sum() == 0), df_bid.isna().sum()
 
 upsampled_rev_agg = df_bid[["geoI",*performance_C]].groupby("geoI").sum()
@@ -350,7 +317,7 @@ print("revenue upsampling broken out by geolocation bool:")
 from IPython.display import display as ipydisp
 ipydisp(upsample_proportions)
 
-assert all(upsample_proportions.loc[False] < 0.6)
+assert all(upsample_proportions.loc[False] < 0.1)
 assert all(upsample_proportions.loc[True] > 40)
 assert all(upsample_proportions.loc[True] < 60)
 #%%
