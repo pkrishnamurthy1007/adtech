@@ -17,7 +17,7 @@ logging.basicConfig(level=LOGLEVEL)
 # logging.getLogger('suds.transport.http').setLevel(logging.DEBUG)
 
 bing_creds = json.loads(os.getenv("BING_CREDS"))
-bing_creds["BING_REFRESH_TOKEN"] = "M.R3_BAY.-CeefO6bNKWF4el5x*Edtx4dBCeilSbm0YDBj0UO5Q28x9oVk1!SBMUyqbf1snTjVyWi6tilC0ALPANuHLtKkZEkR5etP9ax9WFxGGjVHOIDsUUo8EwRdk5QXwHrfMa4XMdk40ib4ZyYF3Fm4S8PpE3IkKzPUfNQCibqnpDVGFxjArMFJaQVJ7xhXTu0fZUjinEy3ZSuWx4y87Jw9UUWVnHMV*VFadK60SeTsg!lziXve5dB96xTb74ieV!YlKxU63GnxlDC3*UoK7Te1k1gh5heZZE7j*WIm*ODSrvRHP1NYdmpKW3vq7T5VDVhem5dKklEMLmcoH1XjDdkpHMernABvQS16B7Gkmv5ci3tAJkLh"
+# bing_creds["BING_REFRESH_TOKEN"] = "M.R3_BAY.-CeefO6bNKWF4el5x*Edtx4dBCeilSbm0YDBj0UO5Q28x9oVk1!SBMUyqbf1snTjVyWi6tilC0ALPANuHLtKkZEkR5etP9ax9WFxGGjVHOIDsUUo8EwRdk5QXwHrfMa4XMdk40ib4ZyYF3Fm4S8PpE3IkKzPUfNQCibqnpDVGFxjArMFJaQVJ7xhXTu0fZUjinEy3ZSuWx4y87Jw9UUWVnHMV*VFadK60SeTsg!lziXve5dB96xTb74ieV!YlKxU63GnxlDC3*UoK7Te1k1gh5heZZE7j*WIm*ODSrvRHP1NYdmpKW3vq7T5VDVhem5dKklEMLmcoH1XjDdkpHMernABvQS16B7Gkmv5ci3tAJkLh"
 
 # from ds_utils.db.connectors import HealthcareDW,AnalyticsDB
 # with AnalyticsDB() as db:

@@ -29,7 +29,7 @@ def ema(S, window) -> typing.Iterable:
     return np.convolve([*S, *S, *S], EMAker, mode="same")[L:-L]
 
 def wavg(V, W):
-    if W.sum() == 0:return 0
+    if W.sum() == 0:return np.NaN
     if V.shape.__len__() > 1:
         return (V*W.values.reshape(-1,1)).sum() / W.sum()
     else:
