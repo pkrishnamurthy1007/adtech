@@ -17,12 +17,7 @@ import boto3
 from IPython.display import display as ipydisp
 from ds_utils.db.connectors import HealthcareDW
 
-#### DEFINE GLOBAL VARIABLES ####
-
-CLICKS = 120 #click threshold. level at which kw uses all of its own data
-MAX_PUSH = 0.2
-MAX_CUT = -0.3
-CPC_MIN = 0.05
+#### Get reporting data for bidder ####
 
 perf_reporting_sql = """
 SELECT
@@ -63,12 +58,6 @@ ON perf_reporting.keyword_id = kw.keyword_id
 with HealthcareDW(database="adtech") as db:
     reporting_df = db.to_df(kw_sql)
 reporting_df_bkp = reporting_df
-
-# TODO: pull down keywords for all active campaigns in data window as kw df
-with HealthcareDW(database="adtech") as db:
-    accnt_df = db.to_df("select * from dl_gold.adtech_bingads_account")
-# with HealthcareDW(database="adtech") as db:
-#     kw_df = db.to_df("select * from dl_gold.adtech_bingads_keyword")
 
 # # TODO: address roughly 3k in "un-accounted" revenue
 # reporting_df[reporting_df["account_id"].isna()]["rev"].sum()
@@ -282,6 +271,18 @@ df_bid = reporting_df[["bid_key",
     .drop_duplicates(subset=["bid_key"],keep="last")
 print("|df_bid|", df_bid.shape)
 
+df_bid = pd.merge(
+    df_bid,
+    accnt_df[[
+    "account_id",
+    "click_threshold","roi_target","max_push","max_cut","cpc_min",
+    "keyword_bidder_enabled","keyword_geo_bidder_enabled"]],
+    how="left",
+    on="account_id"
+)
+df_bid = df_bid[df_bid["keyword_bidder_enabled"] == "Y"]
+print("|df_bid|", df_bid.shape)
+
 #jon kw attributes
 df_bid = pd.merge(df_bid, df_bid_perf, how="left", on=["bid_key"],suffixes=("","_"))
 df_bid[[f"{c}_raw" for c in df_bid_perf.columns]] = df_bid[df_bid_perf.columns]
@@ -317,7 +318,7 @@ print("revenue upsampling broken out by geolocation bool:")
 from IPython.display import display as ipydisp
 ipydisp(upsample_proportions)
 
-assert all(upsample_proportions.loc[False] < 0.1)
+assert all(upsample_proportions.loc[False] < 0.5)
 assert all(upsample_proportions.loc[True] > 40)
 assert all(upsample_proportions.loc[True] < 60)
 #%%
@@ -437,15 +438,6 @@ df_bid["max_cpc_new"] = df_bid["max_cpc_new"].round(2)
 df_bid["bid_change"] = df_bid["max_cpc_new"] - df_bid["max_cpc_old"]
 
 #prepare output
-# df_out = df_bid[
-#     ["account_id", "match",
-#     "campaign_id","adgroup_id","keyword_id",
-#     "campaign","adgroup","keyword",
-#     "clicks","rev","cost",
-#     "clicks_raw", "rev_raw", "cost_raw",
-#     "max_cpc_old","max_cpc_new",
-#     "rpc_est","cpc_target",
-#     "bid_change","perc_change"]]
 df_out = df_bid
 df_out = df_out.rename(
     columns={
