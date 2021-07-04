@@ -12,7 +12,7 @@ botocore
 gsheets
 tqdm
 ipykernel
-bingads
+bingads==13.0.9.1
 docutils
 s3fs
 uniplot
