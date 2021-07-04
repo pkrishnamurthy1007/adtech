@@ -61,7 +61,7 @@ ON perf_reporting.keyword_id = kw.keyword_id
 with HealthcareDW(database="adtech") as db:
     reporting_df = db.to_df(kw_sql)
 reporting_df_bkp = reporting_df
-
+#%%
 # # TODO: address roughly 3k in "un-accounted" revenue
 # reporting_df[reporting_df["account_id"].isna()]["rev"].sum()
 # reporting_df[reporting_df["keyword_id"].isna()]["rev"].sum()
@@ -69,8 +69,6 @@ reporting_df = pd.merge(
     reporting_df,
     accnt_df[["account_id","account_name"]],
     on="account_id")
-#%%
-reporting_df = reporting_df_bkp
 
 #### DATA MUNGING AND CLEANING ####
 """
@@ -145,7 +143,7 @@ date_kpi_accnt_df[[("ROAS",accnt) for accnt in accnts]] = \
     (date_kpi_accnt_df["rev"] / date_kpi_accnt_df["cost"])[accnts]
 #%%
 for kpi in [*kpiC,"ROAS"]:
-    date_kpi_accnt_df[kpi][accnts[:-1]] \
+    date_kpi_accnt_df[kpi][accnts] \
         .rolling(7).mean().plot()
     plt.title(kpi)
     plt.show()

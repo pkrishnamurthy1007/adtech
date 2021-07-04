@@ -12,7 +12,8 @@ botocore
 gsheets
 tqdm
 ipykernel
-bingads
+# NOTE: our auth flow only works for this bingads version: https://healthcareinc.slack.com/archives/C01S6Q6VDSP/p1625357355106000
+bingads==13.0.9.1
 docutils
 s3fs
 uniplot

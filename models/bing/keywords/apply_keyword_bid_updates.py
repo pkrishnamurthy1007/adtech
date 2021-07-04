@@ -77,3 +77,8 @@ for accnt_id in df_out["account_id"].astype(int).unique():
     keyword_bid_updates = [kwu.keyword.Bid.Amount for kwu in keyword_updates]
     assert all(np.array(sorted(keyword_bid_updates)) == np.array(sorted(keyword_bids)))
 # %%
+# as part of auth flow a new refresh token is generated - store in AWS secret manager
+bing_creds["BING_REFRESH_TOKEN"] = accnt_client.authentication._oauth_tokens._refresh_token
+os.environ["BING_CREDS"] = json.dumps(bing_creds)
+from utils.env import dump_env_to_aws
+dump_env_to_aws()
