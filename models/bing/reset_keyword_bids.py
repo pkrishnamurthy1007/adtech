@@ -163,6 +163,7 @@ bing_creds = json.loads(os.getenv("BING_CREDS"))
 LOGLEVEL = logging.WARN
 from api.bingads.bingapi.client import BingClient
 #%%
+1/0
 DAY = datetime.timedelta(days=1)
 accnt2reset_date = {
     # 'HealthCare.com O65': 1/0,
