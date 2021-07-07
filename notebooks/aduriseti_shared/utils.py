@@ -317,3 +317,4 @@ U65 = "HEALTH"
 O65 = 'MEDICARE'
 PRODUCTS = [U65,O65]
 #%%
+TABOOLA_OS_DOMAIN = ['Mac_OS_X', 'Linux', 'Windows', 'iOS', 'iPadOS', 'Android']
