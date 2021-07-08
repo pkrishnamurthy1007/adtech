@@ -1,7 +1,7 @@
 import csv
 from ipaddress import IPv4Network, IPv4Address
-from generic import Timer
-from geoip.ip_utils import extract_octets
+from ds_utils.utils.time import Timer
+from ip_utils import extract_octets
 
 
 # Takes the maxmind blocks file and adds 3 columns that aid in optimizing database joins on redshift:
@@ -11,8 +11,8 @@ from geoip.ip_utils import extract_octets
 
 # debugging option, stop at this many rows for testing, None to disable
 breakrows = None
-infile = '/datascience-utils/geoip/maxmind20200901/GeoIP2-City-Blocks-IPv4.csv'
-outfile = '/datascience-utils/geoip/maxmind20200901/GeoIP2-City-Blocks-IPv4-opt.csv'
+infile = '/Users/jdelvalle/Downloads/GeoIP2-City-CSV_20210702/GeoIP2-City-Blocks-IPv4.csv'
+outfile = '/Users/jdelvalle/Downloads/GeoIP2-City-CSV_20210702/GeoIP2-City-Blocks-IPv4-opt.csv'
 
 if __name__ == '__main__':
     timer = Timer()
