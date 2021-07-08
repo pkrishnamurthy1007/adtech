@@ -235,30 +235,44 @@ def agg_rps(start_date,end_date,product,traffic_source,agg_columns):
     return df
 #%%
 from models.utils import wavg,get_wavg_by
+TABOOLA_DESK    = 'DESK'
+TABOOLA_PHON    = 'PHON'
+TABOOLA_TBLT    = 'TBLT'
+TABOOLA_LINUX   = "Linux"
+TABOOLA_MACOS   = 'Mac OS X'
+TABOOLA_WINOS   = "Windows"
 taboola_val_map = {
     "device": {
-        'DESKTOP': 'DESK',
-        'MOBILE': 'PHON',
-        'TABLET': 'TBLT',
+        'DESKTOP':  TABOOLA_DESK,
+        'MOBILE':   TABOOLA_PHON,
+        'TABLET':   TABOOLA_TBLT,
+        "D":        TABOOLA_DESK,
+        "P":        TABOOLA_PHON,
+        "T":        TABOOLA_TBLT,            
     },
     "operating_system": {
-        "Linux": "Linux",
-        'Linux armv7l': "Linux",
-        'Linux armv8l': "Linux",
-        'Linux x86_64': "Linux",
-        'MacIntel': 'Mac OS X',
-        'Win32': "Windows",
+        "Linux": TABOOLA_LINUX,
+        'Linux armv7l': TABOOLA_LINUX,
+        'Linux armv8l': TABOOLA_LINUX,
+        'Linux x86_64': TABOOLA_LINUX,
+        "ARM": TABOOLA_LINUX,
+        "FreeBSD amd64": TABOOLA_LINUX,
+        'Linux aarch64': TABOOLA_LINUX,
+        'Linux armv7': TABOOLA_LINUX,
+        'Linux i686': TABOOLA_LINUX,
+        
+        'MacIntel': TABOOLA_MACOS,
+        
+        'Win32': TABOOLA_WINOS,
+        'Win64': TABOOLA_WINOS,
+        'Windows': TABOOLA_WINOS,
+
         'iPad': "iPadOS",
         'iPhone': "iOS",
-        '': None,
-        'ARM': None,
-        'Android': 'Android',
-        'Linux aarch64': "Linux",
-        'Win64': "Windows",
-        'Linux armv7': "Linux",
-        'Linux i686': "Linux",
-        'Windows': "Windows",
         "iPod touch": "iOS",
+        'Android': 'Android',
+
+        '': None,
     }
 }
 
@@ -270,28 +284,19 @@ def translate_taboola_vals(df):
             df[c] = df[c] \
                 .map(taboola_val_map[c]) \
                 .combine_first(df[c])
-    df_bkp = df
+    df = df.set_index(index_cols)
     avgC = ["lps_avg","rpl_avg","rps_avg", 
             "score_null_avg", "score_adv_avg", "score_supp_avg",]
-    df = df \
+    df_translated = df \
         .groupby(index_cols) \
-        .agg({
-            "revenue": sum,
-            "sessions": sum,
-            "num_leads": sum,
-            **{c: get_wavg_by(df, "sessions") for c in avgC},
-        })
-    df["int_ix"] = range(len(df))
-    df_bkp_wavg = wavg(df_bkp[avgC],df_bkp["sessions"])
+        [["revenue","sessions","num_leads"]].sum()
+    df_translated[avgC] = \
+        (df[avgC] * df[["sessions"]].values) .groupby(index_cols) .sum() \
+            / df.groupby(index_cols)[["sessions"]].sum().values
     df_wavg = wavg(df[avgC],df["sessions"])
-    assert all((df_bkp_wavg - df_wavg).abs() < 1e-2), (df_bkp_wavg,df_wavg)
-    return df
-
-def agg_rps_taboola(start_date, end_date, product, traffic_source, agg_columns):
-    rps_df = agg_rps(start_date, end_date, product,
-                     traffic_source, agg_columns)
-    rps_df = translate_taboola_vals(rps_df)
-    return rps_df
+    df_translated_avg = wavg(df_translated[avgC],df_translated["sessions"])
+    assert all((df_translated_avg - df_wavg).abs() < 1e-2), (df_translated_avg,df_wavg)
+    return df_translated
 #%%
 GOOGLE = "GOOGLE"
 BING = "BING"
@@ -312,3 +317,4 @@ U65 = "HEALTH"
 O65 = 'MEDICARE'
 PRODUCTS = [U65,O65]
 #%%
+TABOOLA_OS_DOMAIN = ['Mac_OS_X', 'Linux', 'Windows', 'iOS', 'iPadOS', 'Android']

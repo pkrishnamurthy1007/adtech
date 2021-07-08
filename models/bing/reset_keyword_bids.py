@@ -141,7 +141,7 @@ date_kpi_accnt_df = reporting_df \
 accnts = reporting_df["account_name"].dropna().unique()
 date_kpi_accnt_df[[("ROAS",accnt) for accnt in accnts]] = \
     (date_kpi_accnt_df["rev"] / date_kpi_accnt_df["cost"])[accnts]
-#%%
+
 for kpi in [*kpiC,"ROAS"]:
     date_kpi_accnt_df[kpi][accnts] \
         .rolling(7).mean().plot()
@@ -157,12 +157,13 @@ for kpi in [*kpiC,"ROAS"]:
 # with HealthcareDW(database="adtech") as db:
 #     bid_hist_df = db.to_df(bid_hist_sql)
 # bid_hist_df
-#%%
+
 import json,logging
 bing_creds = json.loads(os.getenv("BING_CREDS"))
 LOGLEVEL = logging.WARN
 from api.bingads.bingapi.client import BingClient
-#%%
+
+1/0
 DAY = datetime.timedelta(days=1)
 accnt2reset_date = {
     # 'HealthCare.com O65': 1/0,

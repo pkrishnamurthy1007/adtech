@@ -318,8 +318,8 @@ print("revenue upsampling broken out by geolocation bool:")
 from IPython.display import display as ipydisp
 ipydisp(upsample_proportions)
 
-assert all(upsample_proportions.loc[False] < 0.5)
-assert all(upsample_proportions.loc[True] > 40)
+assert all(upsample_proportions.loc[False] < 0.1)
+assert all(upsample_proportions.loc[True] > 35)
 assert all(upsample_proportions.loc[True] < 60)
 #%%
 #### CREATE AGGREGATIONS FOR USE IN RPC ###
