@@ -42,7 +42,7 @@ SELECT
     max_cpc                 AS max_cpc
 FROM hc.tron.intraday_profitability
 WHERE
-    date >= current_date - 180 AND
+    date >= current_date - 360 AND
     channel = 'SEM' AND
     traffic_source = 'BING'
 """
@@ -142,10 +142,20 @@ accnts = reporting_df["account_name"].dropna().unique()
 date_kpi_accnt_df[[("ROAS",accnt) for accnt in accnts]] = \
     (date_kpi_accnt_df["rev"] / date_kpi_accnt_df["cost"])[accnts]
 
+
+DAY = datetime.timedelta(days=1)
 for kpi in [*kpiC,"ROAS"]:
-    date_kpi_accnt_df[kpi][accnts] \
+    date_kpi_accnt_df[kpi] \
+            [[
+                # 'Pivot Medicare',
+                'HealthCare.com O65',
+                'HealthCare.org U65',
+                # 'MedicareGuide.com',
+                'HealthCare.com U65'
+            ]] \
         .rolling(7).mean().plot()
     plt.title(kpi)
+    plt.xlim([TODAY-360*DAY,TODAY])
     plt.show()
 #%%
 # bid_hist_sql = f"""

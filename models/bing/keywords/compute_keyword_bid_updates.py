@@ -242,6 +242,8 @@ assert all(bad_kws.str.count(STATE_TAG) > 1)
 # reporting_df["bid_key"] = reporting_df[kw_idx_C].apply(tuple,axis=1).apply(str)
 reporting_df["bid_key"] = reporting_df["keyword_id"]
 #%%
+(df_bid == 0).sum()
+#%%
 DATE_WINDOW = 7
 # get rev,click,cost sums for past week
 performance_C = ["clicks",'rev','cost']
@@ -269,6 +271,9 @@ df_bid = reporting_df[["bid_key",
                         "adgroup_norm", "keyword_norm", 'geoI',
                         "max_cpc", "latest_max_cpc", ]] \
     .drop_duplicates(subset=["bid_key"],keep="last")
+print("|df_bid|", df_bid.shape)
+# remove entries w/ NULL account metadata entries
+df_bid = df_bid[~df_bid[kw_gp_idx_C].isna().any(axis=1)]
 print("|df_bid|", df_bid.shape)
 
 df_bid = pd.merge(
