@@ -106,35 +106,6 @@ kpi_agg_d = {
     "clicks": sum,
     "max_cpc": "mean",
 }
-def plot_performance(reporting_df):
-    date_kpi_df = reporting_df .groupby("date").agg(kpi_agg_d)
-    date_kpi_df["ROAS"] = date_kpi_df["rev"] / date_kpi_df["cost"]
-    kpiC += ["ROAS"]
-    for n in [3, 7, 14, 30]:
-        rolling_kpi_C = [f"{c}_{n}d_avg" for c in kpiC]
-        date_kpi_df[rolling_kpi_C] = date_kpi_df[kpiC].rolling(n).mean()
-        (date_kpi_df[rolling_kpi_C] /
-        date_kpi_df[rolling_kpi_C].mean()).iloc[:, :-1].plot()
-
-    roasC = [c for c in date_kpi_df.columns if c.startswith("ROAS")]
-    date_kpi_df[roasC[1:]].plot()
-
-    # # requires `gnuplot` which may not be available on gh action server
-    # import termplotlib
-    # termplotlib.plot.plot(bucket_rps_df["rps_avg_true"].fillna(0),bucket_rps_df["rps_avg_true"].index)
-
-    # # doesnt work in vscode
-    # import plotext
-    # plotext.plot([dfagg_norm["max_cpc"], dfagg_norm["rev_7day"]], dfagg_norm.index)
-    # plotext.title(f"mean normalized 7-day rolling rev and reported max_cpc")
-    # plotext.plotsize(100,30)
-    # plotext.show()
-
-    uniplot.plot([*date_kpi_df[roasC[1:]].fillna(1).values.T],
-                legend_labels=roasC[1:],
-                title=f"rolling ROAS",
-                width=90, height=15)
-
 date_kpi_accnt_df = reporting_df \
     .groupby(["account_name","date"]) .agg(kpi_agg_d) \
     .unstack(level=0)

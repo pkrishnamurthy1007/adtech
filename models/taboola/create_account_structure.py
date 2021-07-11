@@ -295,25 +295,21 @@ camp_attr_df = pd.DataFrame(camps)
 camp_attr_df.to_csv("campaign_dump.csv")
 camp_attr_df
 # %%
-import json
-
-TABOOLA_HC_CREDS = json.loads(os.getenv("TABOOLA_HC_CREDS"))
-TABOOLA_PIVOT_CREDS = json.loads(os.getenv("TABOOLA_PIVOT_CREDS"))
-
-from pytaboola import TaboolaClient
-client = TaboolaClient(**TABOOLA_HC_CREDS)
-client.token_details
-
-from pytaboola.services import AccountService
-from pytaboola.services import CampaignService
-
 import itertools
 import tqdm
 import pandas as pd
 import os
 from pkg_resources import resource_filename as rscfn
 
+import json
+TABOOLA_HC_CREDS = json.loads(os.getenv("TABOOLA_HC_CREDS"))
+TABOOLA_PIVOT_CREDS = json.loads(os.getenv("TABOOLA_PIVOT_CREDS"))
 
+from pytaboola import TaboolaClient
+from pytaboola.services import AccountService,CampaignService
+
+client = TaboolaClient(**TABOOLA_HC_CREDS)
+client.token_details
 acct_service = AccountService(client)
 accnts = acct_service.list()["results"]
 NETWORK_ACCNT_ID = "healthcareinc-network"
