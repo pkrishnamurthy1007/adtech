@@ -270,6 +270,9 @@ df_bid = reporting_df[["bid_key",
                         "max_cpc", "latest_max_cpc", ]] \
     .drop_duplicates(subset=["bid_key"],keep="last")
 print("|df_bid|", df_bid.shape)
+# remove entries w/ NULL account metadata entries
+df_bid = df_bid[~df_bid[kw_gp_idx_C].isna().any(axis=1)]
+print("|df_bid|", df_bid.shape)
 
 df_bid = pd.merge(
     df_bid,
