@@ -177,6 +177,8 @@ def unified_session(start_date,end_date,product,traffic_source):
     
     with HealthcareDW() as db:
         session_df = db.to_df(unified_session_sql)
+    session_df["sessions"] = 1
+    session_df["num_leads"] = session_df["revenue"] > 0
     return session_df
     
 @functools.lru_cache()
@@ -312,9 +314,23 @@ MAJOR_TRAFFIC_SOURCES = [
     TABOOLA,
 #     YAHOO,
 ]
-#%%
+
 U65 = "HEALTH"
 O65 = 'MEDICARE'
 PRODUCTS = [U65,O65]
-#%%
 TABOOLA_OS_DOMAIN = ['Mac_OS_X', 'Linux', 'Windows', 'iOS', 'iPadOS', 'Android']
+#%%
+def rps_df_postprocess(rps_df):
+    rps_df["leads"] = rps_df["num_leads"].fillna(0)
+    rps_df["lps"] = rps_df["leads"] / rps_df["sessions"]
+    rps_df["rpl"] = rps_df["revenue"] / rps_df["leads"]
+    rps_df["score"] = rps_df[["score_null_avg",
+                            "score_adv_avg", "score_supp_avg"]].sum(axis=1)
+    rps_df["rps"] = rps_df["rps_avg"]
+    rps_df["rps_"] = rps_df["revenue"] / rps_df["sessions"]
+    delta = rps_df["rps"] - rps_df["rps_"]
+    assert delta.abs().max() < 1e-10
+    assert abs(rps_df["revenue"].sum() / rps_df["sessions"].sum() -
+            wavg(rps_df["rps"], rps_df["sessions"])) < 1e-10
+
+    return rps_df

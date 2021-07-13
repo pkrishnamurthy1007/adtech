@@ -20,9 +20,13 @@ from models.utils import wavg, get_wavg_by, wstd
 from IPython.display import display as ipydisp
 from models.utils.rpc_est import get_split_factor
 import models.utils.rpc_est
+importlib.reload(models.utils.rpc_est)
+AggRPSClust = models.utils.rpc_est.AggRPSClust
+TreeRPSClust = models.utils.rpc_est.TreeRPSClust
+KpiSimClust = models.utils.rpc_est.KpiSimClust
+HybridCorrTreeClust = models.utils.rpc_est.HybridCorrTreeClust
 
-
-NOW = datetime.datetime.now()
+NOW = datetime.datetime.utcnow()
 TODAY = NOW.date()
 DAY = datetime.timedelta(days=1)
 
@@ -36,27 +40,10 @@ rps_df = agg_rps(start_date, end_date, None, traffic_source=TABOOLA,
 rps_df = translate_taboola_vals(rps_df)
 rps_df_bkp = rps_df.copy()
 #%%
-rps_df = rps_df_bkp.copy()
-importlib.reload(models.utils.rpc_est)
-AggRPSClust = models.utils.rpc_est.AggRPSClust
-TreeRPSClust = models.utils.rpc_est.TreeRPSClust
-KpiSimClust = models.utils.rpc_est.KpiSimClust
-HybridCorrTreeClust = models.utils.rpc_est.HybridCorrTreeClust
-
 rps_df = rps_df.reset_index()
-rps_df["leads"] = rps_df["num_leads"].fillna(0)
-rps_df["lps"] = rps_df["leads"] / rps_df["sessions"]
-rps_df["rpl"] = rps_df["revenue"] / rps_df["leads"]
-rps_df["score"] = rps_df[["score_null_avg",
-                          "score_adv_avg", "score_supp_avg"]].sum(axis=1)
-rps_df["rps"] = rps_df["rps_avg"]
+rps_df = rps_df_bkp.copy()
 fitI = rps_df['utc_dt'].dt.date < eval_date
 fitI.index = rps_df.index
-rps_df["rps_"] = rps_df["revenue"] / rps_df["sessions"]
-delta = rps_df["rps"] - rps_df["rps_"]
-assert delta.abs().max() < 1e-10
-assert abs(rps_df["revenue"].sum() / rps_df["sessions"].sum() -
-           wavg(rps_df["rps"], rps_df["sessions"])) < 1e-10
 
 clusterer = TreeRPSClust(clusts=32,enc_min_cnt=30).fit(
     rps_df[fitI].set_index([*split_cols, "utc_dt"]), None)
@@ -157,13 +144,8 @@ rps_df_publisher = rps_df \
 #%%
 for ci in lps.index.unique("clust"):
     lps.loc[ci].plot()
-#%%
 rpl[ci].plot()
 #%%
-import json
-TABOOLA_HC_CREDS = json.loads(os.getenv("TABOOLA_HC_CREDS"))
-TABOOLA_PIVOT_CREDS = json.loads(os.getenv("TABOOLA_PIVOT_CREDS"))
-
 from pytaboola import TaboolaClient
 from pytaboola.services import AccountService,CampaignService,CampaignSummaryReport
 # d = CampaignSummaryReport(client, O65_ACCNT_ID).fetch(
@@ -174,9 +156,6 @@ from pytaboola.services import AccountService,CampaignService,CampaignSummaryRep
 client = TaboolaClient(**TABOOLA_HC_CREDS)
 acct_service = AccountService(client)
 accnts = acct_service.list()["results"]
-NETWORK_ACCNT_ID = "healthcareinc-network"
-TEST_ACCNT_ID = "healthcareinc-sc2"
-O65_ACCNT_ID = "taboolaaccount-rangaritahealthcarecom"
 id2accnt = {a["account_id"]: a for a in accnts}
 
 camps = []
@@ -184,104 +163,14 @@ for aid in [TEST_ACCNT_ID,O65_ACCNT_ID]:
     camp_service = CampaignService(client, aid)
     camps += camp_service.list()
 
-import itertools
-cross = itertools.product
-import jmespath
-get = jmespath.search
-
-def yield_from_type_pivot(camp,k):
-    for t,v in cross(
-            get(f"[{k}.type]", camp),
-            get(f"{k}.value", camp) or [""]):
-        yield [(k,(t,v)),1]
-
-def yield_time_rules(camp):
-    DAYS = [
-        'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY',
-        'FRIDAY', 'SATURDAY', 'SUNDAY', ]
-    HRS = range(24)
-    k = "activity_schedule"
-    time_mode = get(f"{k}.mode", camp)
-    if time_mode == "ALWAYS":
-        included_hrs = {
-            day: {hr: 1 for hr in HRS}
-            for day in DAYS
-        }
-    else:
-        included_hrs = {
-            day: {hr: 0 for hr in HRS}
-            for day in DAYS
-        }
-        for rule, day, st, end in \
-                get(f"{k}.rules[*].[type,day,from_hour,until_hour]", camp):
-            for hr in range(st, end):
-                included_hrs[day.upper()][hr] = int(rule == "INCLUDE")
-    for day, hr2v in included_hrs.items():
-        for hr, v in hr2v.items():
-            yield [(k, (day, hr)), v]
-
-def yield_bid_strategy_rules(camp):
-    k = "publisher_bid_strategy_modifiers"
-    for r in get(f"{k}.values[*].*",camp):
-        yield [(k,tuple(r)),1]
-
-def yield_bid_modifiers(camp):
-    k = "publisher_bid_modifier"
-    for site,mod in get(f"{k}.values[*].*", camp):
-        yield [(k, site), mod]
-
-flat_K = [
-    "advertiser_id",
-    "id",
-    "cpc",
-    "safety_rating",
-    "daily_cap",
-    "daily_ad_delivery_model",
-    "bid_type",
-    "bid_strategy",
-    "traffic_allocation_mode",
-    "marketing_objective",
-    "is_active",
-]
-type_pivoted_K = [
-    "country_targeting",
-    "sub_country_targeting",
-    "dma_country_targeting",
-    "region_country_targeting",
-    "city_targeting",
-    "postal_code_targeting",
-    "contextual_targeting",
-    "platform_targeting",
-    "publisher_targeting",
-    "auto_publisher_targeting",
-    # "os_targeting",
-    "connection_type_targeting",
-    "browser_targeting",
-]
-
-def flatten_camp(camp):
-    campd = {("attrs",k): camp[k] for k in flat_K}
-    for k in type_pivoted_K:
-        campd.update(dict(yield_from_type_pivot(camp,k)))
-    campd.update(dict(yield_time_rules(camp)))
-    campd.update(dict(yield_bid_strategy_rules(camp)))
-    campd.update(dict(yield_bid_modifiers(camp)))
-    return campd
-
-import pandas as pd
 campdf = pd.DataFrame([flatten_camp(camp) for camp in camps])
 campdf = campdf.set_index(("attrs", "id"))
 campdf.columns = pd.MultiIndex.from_tuples(campdf.columns)
-# bid_mod_C = [c for c in campdf.columns if "publisher_bid_modifier" == c[0]]
-# campdf[bid_mod_C].fillna(1)
-# campdf = campdf.fillna(0)
 print("|campdf|", campdf.shape)
 
-import numpy as np
 print("campaign df sparsity:",((campdf == 0) | campdf.isna()).sum().sum() / np.prod(campdf.shape))
 strC = campdf.dtypes[campdf.dtypes == object].index
 floatC = campdf.dtypes[campdf.dtypes == np.float64].index
-#%%
 # %%
 # active_camp_df = pd.read_csv(rscfn(__name__,"active_campaigns.csv"))
 # active_camps = active_camp_df["id"]
@@ -300,7 +189,7 @@ resp = requests.get(
     f"{TABOOLA_BASE}/{O65_ACCNT_ID}/allowed-publishers/",
     headers=client.authorization_header)
 taboola_publishers = jmespath.search('results[].account_id', resp.json())
-
+#%%
 bid_mod_df = campdf["publisher_bid_modifier"] \
     .reindex(active_camps) \
     .T.reindex(taboola_publishers).T
@@ -317,15 +206,94 @@ approx1 = (bid_mod_df_new - 1).abs() < 1e-2
 bid_mod_df_new = bid_mod_df_new.loc[:,~(bid_mod_df_new.isna() | approx1).all(axis=0)]
 bid_mod_df_new = bid_mod_df_new \
     .combine_first(bid_mod_df.loc[:,~bid_mod_df.isna().any()])
-
-campdf.loc[active_camps,("updates","cpc")] = cpc_df_campaign_new
+#%%
+campdf.loc[active_camps,("updates","cpc")] = cpc_df_campaign_new.round(2)
 campdf.loc[active_camps,("updates","publisher_bid_modifier")] = \
-    bid_mod_df_new.apply(
+    bid_mod_df_new.round(2).apply(
         lambda r: {
-                "values": [{'target': c, "bid_modification": v} for c,v in r.items()]
+                "values": [{'target': c, "bid_modification": v} for c,v in r[~r.isna()].items()]
             },
         axis=1)
-campdf.loc[active_camps,"updates"].apply(dict,axis=1)
+#%%
+updatedf = pd.concat((
+    campdf.loc[active_camps,"attrs"]["advertiser_id"],
+    campdf.loc[active_camps,"updates"].apply(dict,axis=1).apply(json.dumps),
+),axis=1) \
+    .reset_index()
+updatedf.columns = ["campaign_id","account_id","update"]
+updatedf["date"] = TODAY
+updatedf["datetime"] = NOW
+
+DS_SCHEMA = "data_science"
+TABOOLA_CAMPAIGN_UPDATE_TABLE = "taboola_campaign_updates_test_super_3"
+def upload_taboola_updates_to_redshift(updatedf):
+    table_creation_sql = f"""
+        CREATE TABLE IF NOT EXISTS
+        {DS_SCHEMA}.{TABOOLA_CAMPAIGN_UPDATE_TABLE}
+        (
+            "account_id"            VARCHAR(256),
+            "campaign_id"           VARCHAR(256),
+            "date"                  DATE,
+            "datetime"              DATETIME,
+            "update"                SUPER,
+            "schedule"              SUPER
+        );
+    """
+    with HealthcareDW() as db:
+        db.exec(table_creation_sql)
+        db.load_df(updatedf, schema=DS_SCHEMA,table=TABOOLA_CAMPAIGN_UPDATE_TABLE)
+
+upload_taboola_updates_to_redshift(updatedf)
+#%%
+sql = f"""
+    SELECT 
+        *
+    FROM (
+        SELECT 
+            *,
+            ROW_NUMBER() OVER (
+                PARTITION BY account_id,campaign_id,schedule
+                ORDER BY datetime DESC
+            ) as rn
+        FROM 
+            {DS_SCHEMA}.{TABOOLA_CAMPAIGN_UPDATE_TABLE}
+    )
+    WHERE 
+        rn = 1
+    ;
+"""
+with HealthcareDW() as db:
+    updatedf = db.to_df(sql)
+updatedf['update'] = updatedf['update'].apply(json.loads)
+#%%
+for _,r in updatedf.iterrows():
+    client = TaboolaClient(**TABOOLA_HC_CREDS)
+    camp_service = CampaignService(client, r["account_id"])
+    camp_service.update(r["campaign_id"],**r["update"])
+r
+#%%
+sql = f"""
+select d.query, substring(d.filename,14,20), 
+d.line_number as line, 
+substring(d.value,1,16) as value,
+substring(le.err_reason,1,48) as err_reason
+from stl_loaderror_detail d, stl_load_errors le
+where d.query = le.query
+and d.query = pg_last_copy_id(); 
+"""
+sql = f"""
+select *
+from stl_load_errors
+order by starttime desc
+limit 100 
+"""
+with HealthcareDW() as db:
+    df = db.to_df(sql)
+df
+#%%
+df.iloc[0,-1]
+#%%
+df.iloc[0, -3]
 #%%
 
 rps_df = rps_df.join(campdf["attrs"][["cpc","is_active"]],on="campaign_id",rsuffix="_")
