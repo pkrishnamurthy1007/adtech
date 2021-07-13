@@ -141,19 +141,25 @@ for ci in clust_dt_rps_df.index.unique("clust"):
     clust_dt_rps_df.loc[ci, "rps_est"].plot(label=ci)
 plt.legend()
 plt.show()
-#%%
+
 rps_df = rps_df.sort_values(["clust","utc_dt"])
 rps_df["rps_est"] = rps_df.set_index(["clust","utc_dt"])[[]].join(clust_dt_rps_df["rps_est"]).values
-rps_df["rps_est"]
-#%%
-rps_df.groupby(["utc_dt","campaign_id"])[["rps_est"]] \
-    .agg(get_wavg_by(rps_df,"sessions")) \
-#%%
-df = rps_df.groupby(["utc_dt", "campaign_id","keyword"])[["rps_est"]] \
+# rps_df.groupby(["utc_dt","campaign_id"])[["rps_est"]] \
+#     .agg(get_wavg_by(rps_df,"sessions"))
+rps_df_campaign = rps_df[rps_df["utc_dt"].dt.date > TODAY - 7*DAY] \
+    .groupby(["campaign_id"])[["rps_est"]] \
     .agg(get_wavg_by(rps_df, "sessions"))
+rps_df_publisher = rps_df \
+        [rps_df["utc_dt"].dt.date > TODAY - 7*DAY] \
+        .groupby(["campaign_id","keyword"])[["rps_est"]] \
+        .agg(get_wavg_by(rps_df, "sessions")) \
+        .unstack()
 #%%
-df.unstack()
-# %%
+for ci in lps.index.unique("clust"):
+    lps.loc[ci].plot()
+#%%
+rpl[ci].plot()
+#%%
 import json
 TABOOLA_HC_CREDS = json.loads(os.getenv("TABOOLA_HC_CREDS"))
 TABOOLA_PIVOT_CREDS = json.loads(os.getenv("TABOOLA_PIVOT_CREDS"))
@@ -225,6 +231,7 @@ def yield_bid_modifiers(camp):
         yield [(k, site), mod]
 
 flat_K = [
+    "advertiser_id",
     "id",
     "cpc",
     "safety_rating",
@@ -234,6 +241,7 @@ flat_K = [
     "bid_strategy",
     "traffic_allocation_mode",
     "marketing_objective",
+    "is_active",
 ]
 type_pivoted_K = [
     "country_targeting",
@@ -262,6 +270,7 @@ def flatten_camp(camp):
 
 import pandas as pd
 campdf = pd.DataFrame([flatten_camp(camp) for camp in camps])
+campdf = campdf.set_index(("attrs", "id"))
 campdf.columns = pd.MultiIndex.from_tuples(campdf.columns)
 # bid_mod_C = [c for c in campdf.columns if "publisher_bid_modifier" == c[0]]
 # campdf[bid_mod_C].fillna(1)
@@ -272,12 +281,62 @@ import numpy as np
 print("campaign df sparsity:",((campdf == 0) | campdf.isna()).sum().sum() / np.prod(campdf.shape))
 strC = campdf.dtypes[campdf.dtypes == object].index
 floatC = campdf.dtypes[campdf.dtypes == np.float64].index
-# %%
 #%%
-campdf.set_index(("attrs","id"))
-#%%
-campdf["publisher_bid_modifier"] * campdf["attrs"][["cpc"]].values
 # %%
+# active_camp_df = pd.read_csv(rscfn(__name__,"active_campaigns.csv"))
+# active_camps = active_camp_df["id"]
+
+activeI = campdf["attrs"]["is_active"]
+active_camps = campdf.loc[activeI].index
+cpc_df_campaign_new = np.clip(
+    rps_df_campaign["rps_est"].reindex(active_camps) / ROI_TARGET,
+    (1-MAX_CUT)*campdf["attrs"].loc[active_camps,"cpc"],
+    (1+MAX_PUSH)*campdf["attrs"].loc[active_camps,"cpc"])
+cpc_df_campaign_new = cpc_df_campaign_new \
+                        .combine_first(campdf["attrs"].loc[active_camps,"cpc"])
+
+import requests
+resp = requests.get(
+    f"{TABOOLA_BASE}/{O65_ACCNT_ID}/allowed-publishers/",
+    headers=client.authorization_header)
+taboola_publishers = jmespath.search('results[].account_id', resp.json())
+
+bid_mod_df = campdf["publisher_bid_modifier"] \
+    .reindex(active_camps) \
+    .T.reindex(taboola_publishers).T
+cpc_df_publisher = bid_mod_df.fillna(1) * \
+    campdf["attrs"].loc[active_camps, ["cpc"]].values
+cpc_df_publisher_new = np.clip(
+    rps_df_publisher["rps_est"] \
+        .reindex(active_camps) \
+        .T.reindex(taboola_publishers).T / ROI_TARGET,
+    (1-MAX_CUT)*cpc_df_publisher,
+    (1+MAX_PUSH)*cpc_df_publisher,)
+bid_mod_df_new = cpc_df_publisher_new / cpc_df_campaign_new.values.reshape(-1,1)
+approx1 = (bid_mod_df_new - 1).abs() < 1e-2
+bid_mod_df_new = bid_mod_df_new.loc[:,~(bid_mod_df_new.isna() | approx1).all(axis=0)]
+bid_mod_df_new = bid_mod_df_new \
+    .combine_first(bid_mod_df.loc[:,~bid_mod_df.isna().any()])
+
+campdf.loc[active_camps,("updates","cpc")] = cpc_df_campaign_new
+campdf.loc[active_camps,("updates","publisher_bid_modifier")] = \
+    bid_mod_df_new.apply(
+        lambda r: {
+                "values": [{'target': c, "bid_modification": v} for c,v in r.items()]
+            },
+        axis=1)
+campdf.loc[active_camps,"updates"].apply(dict,axis=1)
+#%%
+
+rps_df = rps_df.join(campdf["attrs"][["cpc","is_active"]],on="campaign_id",rsuffix="_")
+rps_df = rps_df.loc[:,~rps_df.columns.duplicated()]
+rps_df["cost"] = rps_df["cpc"] * rps_df["sessions"]
+df = rps_df \
+    [rps_df["is_active"].fillna(False)] \
+    .groupby(["utc_dt","campaign_id"])\
+    [["revenue","cost"]].sum().unstack()
+(df["revenue"]/df["cost"]).plot()
+#%%
 #%%
 campdf["publisher_bid_modifier"]
 s1 = df["rps_est"].unstack().columns
@@ -287,8 +346,50 @@ len(s1-s2),len(s2-s1),len(s1&s2)
 #%%
 {f[3:] for f in clusterer.enc_features} - s2
 #%%
-s2
-# %%
-campdf["publisher_bid_modifier"].columns
+import requests
+TABOOLA_BASE = "https://backstage.taboola.com/backstage/api/1.0"
+resp = requests.get(
+    f"{TABOOLA_BASE}/resources/campaigns_properties/operating_systems",
+    headers=client.authorization_header)
+taboola_os = jmespath.search('results[].name', resp.json(),)
 
+resp = requests.get(
+    f"{TABOOLA_BASE}/resources/campaigns_properties/platforms",
+    headers=client.authorization_header)
+taboola_platforms = jmespath.search('results[].name', resp.json(),)
+
+resp = requests.get(
+    f"{TABOOLA_BASE}/resources/countries/us/dma",
+    headers=client.authorization_header)
+taboola_dmas = jmespath.search('results[].name', resp.json(),)
+
+resp = requests.get(
+    f"{TABOOLA_BASE}/resources/countries/us/regions",
+    headers=client.authorization_header)
+taboola_states = jmespath.search('results[].name', resp.json(),)
+
+resp = requests.get(
+    f"{TABOOLA_BASE}/{O65_ACCNT_ID}/allowed-publishers/",
+    headers=client.authorization_header)
+taboola_publishers = jmespath.search('results[].account_id',resp.json())
+#%%
+resp = requests.get(
+    f"{TABOOLA_BASE}/{O65_ACCNT_ID}/dictionary/audience_segments/",
+    headers=client.authorization_header)
+taboola_audiences = resp.json()["results"]
+
+resp = requests.get(
+    f"{TABOOLA_BASE}/{O65_ACCNT_ID}/dictionary/lookalike_audiences/",
+    headers=client.authorization_header)
+resp.json()
+
+resp = requests.get(
+    f"{TABOOLA_BASE}/{O65_ACCNT_ID}/dictionary/contextual_segments/",
+    headers=client.authorization_header)
+len(resp.json()["results"])
+# %%
+s3 = {*taboola_publishers}
+len(s1-s3),len(s2-s3)
+# %%
+{f[3:] for f in clusterer.enc_features} - s3
 # %%
