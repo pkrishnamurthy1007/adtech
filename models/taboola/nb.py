@@ -14,21 +14,13 @@ import os
 from matplotlib import pyplot as plt
 import pandas as pd
 import numpy as np
+from IPython.display import display as ipydisp
 
 from notebooks.aduriseti_shared.utils import *
 from models.utils import wavg, get_wavg_by, wstd
-from IPython.display import display as ipydisp
-from models.utils.rpc_est import get_split_factor
-import models.utils.rpc_est
-importlib.reload(models.utils.rpc_est)
-AggRPSClust = models.utils.rpc_est.AggRPSClust
-TreeRPSClust = models.utils.rpc_est.TreeRPSClust
-KpiSimClust = models.utils.rpc_est.KpiSimClust
-HybridCorrTreeClust = models.utils.rpc_est.HybridCorrTreeClust
 
-NOW = datetime.datetime.utcnow()
-TODAY = NOW.date()
-DAY = datetime.timedelta(days=1)
+from models.taboola.common import *
+from models.taboola.utils import *
 
 start_date = TODAY - 90*DAY
 eval_date = TODAY - 30*DAY
@@ -38,14 +30,15 @@ split_cols = ["state", "device", "keyword"]
 rps_df = agg_rps(start_date, end_date, None, traffic_source=TABOOLA,
                  agg_columns=tuple(["campaign_id", *split_cols, "utc_dt"]))
 rps_df = translate_taboola_vals(rps_df)
+rps_df = rps_df_postprocess(rps_df)
 rps_df_bkp = rps_df.copy()
 #%%
-rps_df = rps_df.reset_index()
 rps_df = rps_df_bkp.copy()
+rps_df = rps_df.reset_index()
 fitI = rps_df['utc_dt'].dt.date < eval_date
 fitI.index = rps_df.index
 
-clusterer = TreeRPSClust(clusts=32,enc_min_cnt=30).fit(
+clusterer = TaboolaRPSEst(clusts=32,enc_min_cnt=30).fit(
     rps_df[fitI].set_index([*split_cols, "utc_dt"]), None)
 rps_df.loc[fitI, "clust"] = clusterer.transform(
     rps_df[fitI].set_index([*split_cols, "utc_dt"]))
@@ -81,7 +74,6 @@ rps_wavg = wavg(rps_df[~fitI]["rps"], rps_df[~fitI]["sessions"])
 rps_clust_wavg = wavg(clust_rps_df[["rps"]], clust_rps_df["sessions"])
 assert all((rps_wavg - rps_clust_wavg).abs()
            < 1e-3), (rps_wavg, rps_clust_wavg)
-rps_wavg, rps_clust_wavg
 
 perfd = {
     "clusterer": clusterer,
@@ -95,44 +87,8 @@ perfd = {
 }
 pprint.pprint(perfd)
 #%%
-clust_dt_rps_df = rps_df.groupby(["clust", "utc_dt"])[kpis_agg].sum()
-clust_dt_rps_df[kpis_session] = rps_df.groupby(["clust", "utc_dt"]) \
-    .apply(lambda df: wavg(df[kpis_session], df['sessions']))
-clust_dt_rps_df[kpis_lead] = rps_df[~fitI].groupby(["clust", "utc_dt"]) \
-    .apply(lambda df: wavg(df[kpis_lead].fillna(0).values, df['leads']))
+rps_df["rps_est"] = clusterer.predict(rps_df.set_index([*split_cols,"utc_dt"]))
 
-# 30 is a good breakpt for using bag mtd
-clust_dt_rps_df = clust_dt_rps_df.groupby("clust") \
-    .apply(lambda df:
-           df
-           .reset_index("clust", drop=True)
-           .reindex(pd.date_range(start_date, end_date)).fillna(0))
-clust_dt_rps_df.index.names = ["clust", "utc_dt"]
-
-def get_nday_sum(c,n):
-    def f(df):
-        return df.groupby("clust") \
-            .apply(lambda df:
-                df
-                .reset_index("clust", drop=True)
-                [[c]].rolling(n).sum()) \
-            [c]
-    return f
-
-rpl = get_nday_sum("revenue", 7)(clust_dt_rps_df).groupby("utc_dt").transform(sum) / \
-    get_nday_sum("leads", 7)(clust_dt_rps_df).groupby("utc_dt").transform(sum)
-lps = get_nday_sum("leads", 60)(clust_dt_rps_df) / get_nday_sum("sessions", 60)(clust_dt_rps_df)
-clust_dt_rps_df["rps_est"] = rpl * lps
-
-for ci in clust_dt_rps_df.index.unique("clust"):
-    clust_dt_rps_df.loc[ci, "rps_est"].plot(label=ci)
-plt.legend()
-plt.show()
-
-rps_df = rps_df.sort_values(["clust","utc_dt"])
-rps_df["rps_est"] = rps_df.set_index(["clust","utc_dt"])[[]].join(clust_dt_rps_df["rps_est"]).values
-# rps_df.groupby(["utc_dt","campaign_id"])[["rps_est"]] \
-#     .agg(get_wavg_by(rps_df,"sessions"))
 rps_df_campaign = rps_df[rps_df["utc_dt"].dt.date > TODAY - 7*DAY] \
     .groupby(["campaign_id"])[["rps_est"]] \
     .agg(get_wavg_by(rps_df, "sessions"))
@@ -141,10 +97,6 @@ rps_df_publisher = rps_df \
         .groupby(["campaign_id","keyword"])[["rps_est"]] \
         .agg(get_wavg_by(rps_df, "sessions")) \
         .unstack()
-#%%
-for ci in lps.index.unique("clust"):
-    lps.loc[ci].plot()
-rpl[ci].plot()
 #%%
 from pytaboola import TaboolaClient
 from pytaboola.services import AccountService,CampaignService,CampaignSummaryReport
@@ -171,12 +123,11 @@ print("|campdf|", campdf.shape)
 print("campaign df sparsity:",((campdf == 0) | campdf.isna()).sum().sum() / np.prod(campdf.shape))
 strC = campdf.dtypes[campdf.dtypes == object].index
 floatC = campdf.dtypes[campdf.dtypes == np.float64].index
-# %%
-# active_camp_df = pd.read_csv(rscfn(__name__,"active_campaigns.csv"))
-# active_camps = active_camp_df["id"]
 
-activeI = campdf["attrs"]["is_active"]
-active_camps = campdf.loc[activeI].index
+# campdf = campdf.reindex({*campdf.index,*active_camps})
+active_camps = {*active_camps} & {*campdf.index}
+active_camps
+#%%
 cpc_df_campaign_new = np.clip(
     rps_df_campaign["rps_est"].reindex(active_camps) / ROI_TARGET,
     (1-MAX_CUT)*campdf["attrs"].loc[active_camps,"cpc"],
@@ -189,7 +140,7 @@ resp = requests.get(
     f"{TABOOLA_BASE}/{O65_ACCNT_ID}/allowed-publishers/",
     headers=client.authorization_header)
 taboola_publishers = jmespath.search('results[].account_id', resp.json())
-#%%
+
 bid_mod_df = campdf["publisher_bid_modifier"] \
     .reindex(active_camps) \
     .T.reindex(taboola_publishers).T
@@ -214,7 +165,8 @@ campdf.loc[active_camps,("updates","publisher_bid_modifier")] = \
                 "values": [{'target': c, "bid_modification": v} for c,v in r[~r.isna()].items()]
             },
         axis=1)
-#%%
+campdf["updates"] = campdf["updates"].where(
+    pd.notnull(campdf["updates"]), None)
 updatedf = pd.concat((
     campdf.loc[active_camps,"attrs"]["advertiser_id"],
     campdf.loc[active_camps,"updates"].apply(dict,axis=1).apply(json.dumps),
@@ -223,25 +175,6 @@ updatedf = pd.concat((
 updatedf.columns = ["campaign_id","account_id","update"]
 updatedf["date"] = TODAY
 updatedf["datetime"] = NOW
-
-DS_SCHEMA = "data_science"
-TABOOLA_CAMPAIGN_UPDATE_TABLE = "taboola_campaign_updates_test_super_3"
-def upload_taboola_updates_to_redshift(updatedf):
-    table_creation_sql = f"""
-        CREATE TABLE IF NOT EXISTS
-        {DS_SCHEMA}.{TABOOLA_CAMPAIGN_UPDATE_TABLE}
-        (
-            "account_id"            VARCHAR(256),
-            "campaign_id"           VARCHAR(256),
-            "date"                  DATE,
-            "datetime"              DATETIME,
-            "update"                SUPER,
-            "schedule"              SUPER
-        );
-    """
-    with HealthcareDW() as db:
-        db.exec(table_creation_sql)
-        db.load_df(updatedf, schema=DS_SCHEMA,table=TABOOLA_CAMPAIGN_UPDATE_TABLE)
 
 upload_taboola_updates_to_redshift(updatedf)
 #%%
@@ -270,7 +203,8 @@ for _,r in updatedf.iterrows():
     client = TaboolaClient(**TABOOLA_HC_CREDS)
     camp_service = CampaignService(client, r["account_id"])
     camp_service.update(r["campaign_id"],**r["update"])
-r
+#%%
+campdf.loc[active_camps]
 #%%
 sql = f"""
 select d.query, substring(d.filename,14,20), 

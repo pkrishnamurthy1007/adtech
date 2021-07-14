@@ -1,6 +1,64 @@
+#%%
+import pandas as pd
+import numpy as np
+from matplotlib import pyplot as plt
 from models.taboola.common import *
-from models.taboola.utils import *
+from models.utils.rpc_est import TreeRPSClust
+class TaboolaRPSEst(TreeRPSClust):
+    def predict(self,X):
+        X["orig_order"] = range(len(X))
+        X["clust"] = self.transform(X)
 
+        kpis_agg = ["revenue", "sessions", "leads"]
+        clust_dt_rps_df = X.groupby(["clust", "utc_dt"])[kpis_agg].sum()
+
+        # 30 is a good breakpt for using bag mtd
+        min_date = X.index.unique("utc_dt").min()
+        max_date = X.index.unique("utc_dt").max()
+        clust_dt_rps_df = clust_dt_rps_df.groupby("clust") \
+            .apply(lambda df:
+                df
+                .reset_index("clust", drop=True)
+                .reindex(pd.date_range(min_date, max_date)).fillna(0))
+        clust_dt_rps_df.index.names = ["clust", "utc_dt"]
+
+
+        def get_nday_sum(c, n):
+            def f(df):
+                return df.groupby("clust") \
+                    .apply(lambda df:
+                        df
+                        .reset_index("clust", drop=True)
+                        [[c]].rolling(n).sum())[c]
+            return f
+
+        # TODO: make time windows configurable in hyperparamas 
+        rpl = get_nday_sum("revenue", 7)(clust_dt_rps_df).groupby("utc_dt").transform(sum) / \
+            get_nday_sum("leads", 7)(clust_dt_rps_df).groupby("utc_dt").transform(sum)
+        lps = get_nday_sum("leads", 60)(clust_dt_rps_df) / \
+            get_nday_sum("sessions", 60)(clust_dt_rps_df)
+        clust_dt_rps_df["rps_est"] = rpl * lps
+
+        if self.plot:
+            for ci in clust_dt_rps_df.index.unique("clust"):
+                clust_dt_rps_df.loc[ci, "rps_est"].plot(label=ci)
+            plt.legend()
+            plt.show()
+
+            for ci in lps.index.unique("clust"):
+                lps.loc[ci].plot()
+            plt.show()
+
+            rpl[ci].plot()
+            plt.show()
+
+        X["rps_est"] = X \
+            .reset_index() \
+            .set_index(["clust","utc_dt"])[[]] \
+            .join(clust_dt_rps_df["rps_est"]).values
+
+        return X.sort_values(by="orig_order")["rps_est"].values
+#%%
 import itertools
 cross = itertools.product
 import jmespath
