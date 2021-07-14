@@ -72,7 +72,7 @@ jobs:
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
           SLACK_MESSAGE: \
-            <${{ env.AMAL_SID }}> Taboola update SUCCESS!
+            <${{ env.AMAL_SID }}> Taboola update FAILURE!
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions

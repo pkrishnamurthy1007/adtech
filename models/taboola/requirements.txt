@@ -1,0 +1,10 @@
+matplotlib
+numpy
+pandas
+sshtunnel
+mysql-connector-python
+psycopg2-binary
+pendulum
+boto3
+ipykernel
+sklearn
