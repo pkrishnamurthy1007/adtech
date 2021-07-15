@@ -40,16 +40,19 @@ class TaboolaRPSEst(TreeRPSClust):
         clust_dt_rps_df["rps_est"] = rpl * lps
 
         if self.plot:
+            for ci in lps.index.unique("clust"):
+                lps.loc[ci].plot()
+            plt.title("LPS per cluster")
+            plt.show()
+
+            plt.title("Overall RPL by date")
+            rpl[ci].plot()
+            plt.show()
+
             for ci in clust_dt_rps_df.index.unique("clust"):
                 clust_dt_rps_df.loc[ci, "rps_est"].plot(label=ci)
             plt.legend()
-            plt.show()
-
-            for ci in lps.index.unique("clust"):
-                lps.loc[ci].plot()
-            plt.show()
-
-            rpl[ci].plot()
+            plt.title("RPS = LPS*RPL by cluster")
             plt.show()
 
         X["rps_est"] = X \

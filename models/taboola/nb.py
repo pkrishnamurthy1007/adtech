@@ -38,6 +38,9 @@ rps_df = rps_df.reset_index()
 fitI = rps_df['utc_dt'].dt.date < eval_date
 fitI.index = rps_df.index
 
+import models.taboola.utils
+importlib.reload(models.taboola.utils)
+TaboolaRPSEst = models.taboola.utils.TaboolaRPSEst
 clusterer = TaboolaRPSEst(clusts=32,enc_min_cnt=30).fit(
     rps_df[fitI].set_index([*split_cols, "utc_dt"]), None)
 rps_df.loc[fitI, "clust"] = clusterer.transform(

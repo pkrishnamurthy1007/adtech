@@ -1,52 +1,61 @@
 #%%
 from models.bing.time_of_day.common import *
-from scipy.interpolate import UnivariateSpline
 import typing
 import numpy as np
 import pandas as pd
 import datetime
 from ds_utils.db.connectors import HealthcareDW
-from models.data.queries.time_of_day import hc_session_conversions,hc_15m_user_tz
-from models.utils import *
+from models.data.queries.time_of_day import hc_15m_user_tz
+from models.utils.time_of_day import add_modifiers,cema_transform,spread_outliers,lowess_transform
+from models.utils import wavg
 
-def add_spline(df, index_col, smooth_col, spline_k, spline_s, suffix='_spline'):
-    df = df.copy().reset_index()
-    spline = UnivariateSpline(
-        x=df[index_col], y=df[smooth_col], k=spline_k, s=spline_s)
-    df.set_index(index_col, inplace=True)
-    df[smooth_col + suffix] = spline(df.index)
-    return df
+def lapprox(X, W, l, r):
+    return X[l]
+def midapprox(X, W, l, r):
+    return X[(l+r)//2]
+def wavgapprox(X, W, l, r):
+    return wavg(X[l:r], W[l:r])
+def interval_fit(X, W, nintervals, xapprox) -> typing.Tuple[typing.List[int],float]:
+    """
+    PREMISE:
+        define subset of X,W w/ leftmost bound of l
+        we then say there must be a unique minimum interval split for k remaining intervals
 
-def cema_transform(y,show_plots=False,window=16):
-    if show_plots:raise NotImplementedError
-    y = spread_outliers(y)
-    y_cema = cma(ema(y, window), window)
-    return y_cema
+        then we test the end pt for this interval for every remaining index from l to N
+    """
+    assert len(X) == len(W)
+    N = len(X)
+    # dp matrix of size (N+1),(nintervals+1) representing fit err and interval splits
+    #   for subsets starting at time index `r` and w/ `c` intervels left to allocate
+    dp = np.empty((N+1, nintervals+2, 2)).astype(object)
+    # l >= len(X|W): all indices assigned to interval - terminate w / 0 MSE
+    dp[N, :] = 0, []
+    # k > nintervals: k represetns # of intervals allocated - so if k > nintervals
+    #                 we have used too many intervals - terminate w / `inf` MSE
+    dp[:, -1] = float('inf'), []
+    for l in reversed(range(N)):
+        for k in reversed(range(0, nintervals+1)):
+            # probe remaining time slots for first interval break
+            def yield_suffix_fits():
+                for r in range(l+1, N+1):
+                    # interval err over l:r
+                    interval_eps = W[l:r] * (X[l:r] - xapprox(X, W, l, r))**2
+                    eps_suffix, int_suffix = dp[r, k+1]
+                    yield interval_eps.sum() + eps_suffix, [r] + int_suffix
+            dp[l, k] = min(yield_suffix_fits())
+    eps,interval_bounds = dp[0, 0]
+    return interval_bounds,eps
 
-from models.utils.time_of_day import Lowess
-def lowess_transform(y, show_plots=False, frac=0.03, max_std_dev=5):
-    if show_plots: raise NotImplementedError
-    y = spread_outliers(y)
-    y_lowess = Lowess().fit_predict(np.arange(len(y)), y.values, frac=frac, max_std_dev=max_std_dev)
-    return y_lowess
+def interval_transform(X,W,nintervals,xapprox,interval_bounds,*_):
+    assert len({*interval_bounds}) == nintervals
+    interval_bounds = [0, *interval_bounds]
+    Xapprox = np.zeros(len(X))
+    for lb, ub in zip(interval_bounds[:-1], interval_bounds[1:]):
+        Xapprox[lb:ub] = xapprox(X, W, lb, ub)
+    return Xapprox
 
-def add_modifiers(df, target_field, weight_field, transform_fn, fit_kwargs={}, show_plots=False):
-    if show_plots: raise NotImplementedError
-    weight = df[weight_field]
-    target = df[target_field]
-    weight_transform = transform_fn(weight,show_plots=False,**fit_kwargs)
-    target_transform = transform_fn(target,show_plots=False,**fit_kwargs)
-    
-    # target_wavg = (target_transform * weight_transform).sum() / weight_transform.sum()
-    target_wavg = target.mean() 
-    target_mod = target_transform / target_wavg
-    target_mod = target_mod * 20 // 1 / 20  # set to incs of 0.05
-    df["baseline"] = 1
-    df[f"{weight_field}_{transform_fn.__name__}"] = weight_transform
-    df[f"{target_field}_{transform_fn.__name__}"] = target_transform
-    df[f"{target_field}_{transform_fn.__name__}_mean"] = target_wavg
-    df[f"{target_field}_{transform_fn.__name__}_modifier"] = target_mod
-    return df
+def interval_fit_transform(X, W, nintervals, xapprox):
+    return interval_transform(X,W,nintervals,xapprox,*interval_fit(X, W, nintervals, xapprox))
 
 def get_interval_modifier_table(df,modifier_field,weight_field,show_plots=False):
     df = df.copy()
@@ -147,7 +156,6 @@ DAY = datetime.timedelta(days=1)
 MONTHS = 5
 start_date = NOW - MONTHS*30*DAY
 end_date = NOW - 0*DAY
-window = 16
 
 start_date_ymd = start_date.strftime("%Y%m%d")
 end_date_ymd = end_date.strftime("%Y%m%d")
