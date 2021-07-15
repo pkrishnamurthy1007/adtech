@@ -1,3 +1,4 @@
+git+ssh://git@github.com/healthcarecom/datascience-utils.git@amal
 matplotlib
 numpy
 pandas
