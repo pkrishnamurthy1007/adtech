@@ -8,8 +8,8 @@ on:
     paths:
       - models/bing/keywords/**
       - .github/workflows/bing_update_bids_keyword.yml
-  schedule:
-  - cron: "0 12 * * *" # 8 am EST
+  # schedule:
+  # - cron: "0 12 * * *" # 8 am EST
   workflow_dispatch:
 
 jobs:

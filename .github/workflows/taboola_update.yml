@@ -8,8 +8,8 @@ on:
     paths:
       - models/taboola/**
       - .github/workflows/taboola_update.yml
-  schedule:
-  - cron: "0 12 * * *" # 8 am EST
+  # schedule:
+  # - cron: "0 12 * * *" # 8 am EST
   workflow_dispatch:
 
 jobs:
