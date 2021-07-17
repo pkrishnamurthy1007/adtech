@@ -48,12 +48,20 @@ jobs:
         env:
           GIT_SSH_KEY: ${{ secrets.GIT_SSH_KEY }}
 
-      - name: Perform update
+      - name: Compute updates
         run: |
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
           python ${GITHUB_WORKSPACE}/models/taboola/compute_bids_infer.py
           python ${GITHUB_WORKSPACE}/models/taboola/compute_tod_mods.py
+
+      - name: Check updates
+        run: |
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
           python ${GITHUB_WORKSPACE}/models/taboola/check_bids.py
+
+      - name: Apply updates
+        run: |
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
           python ${GITHUB_WORKSPACE}/models/taboola/apply_bids.py
 
       - name: Success notification
