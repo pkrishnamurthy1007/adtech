@@ -1,16 +1,17 @@
 name: bing-update-bids-keyword
-id: bing-update-bids-keyword
 
 on:
   push:
-    # branches: 
-    #   - workspace_amal
+    branches: 
+      - workspace_amal
     #   - main
     paths:
       - models/bing/keywords/**
       - .github/workflows/bing_update_bids_keyword.yml
+  
   schedule:
   - cron: "0 12 * * *" # 8 am EST
+  
   workflow_dispatch:
 
 jobs:

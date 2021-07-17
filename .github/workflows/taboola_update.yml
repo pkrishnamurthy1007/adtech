@@ -2,8 +2,8 @@ name: taboola-update
 
 on:
   push:
-    # branches: 
-    #   - workspace_amal
+    branches: 
+      - workspace_amal
     #   - main
     paths:
       - models/taboola/**
