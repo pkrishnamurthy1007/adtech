@@ -346,7 +346,8 @@ df_rpc[["clicks_act","rev_act"]] = df_rpc \
 decay_factor = 0.03 
 days_back = (TODAY - df_rpc.reset_index()["date"].dt.date).dt.days
 df_rpc["decay_multiplier"] = np.exp(-decay_factor * days_back.values)
-
+df_rpc = df_rpc.sort_index(level="date",ascending=False)
+#%%
 """
 TODO:
 Q: how to deal w/ bid trap prpbolem?
@@ -401,6 +402,10 @@ def find_rpc(df_kw):
 df_bid["rpc_est"] = df_bid[kw_gp_idx_C] \
     .apply(lambda r: (slice(None), slice(None), *r), axis=1) \
     .apply(lambda kw_slc: find_rpc(df_rpc.loc[kw_slc]))
+# TODO: write check validating `rpc_est`
+# df = df_bid[df_bid["clicks"] > 120][["rpc_est","clicks","rev","cost"]]
+# df["rpc_est_"] = df["rev"] / df["clicks"]
+# df
 #%%
 """
 cpc_t = cost_t/clicks_t
@@ -474,3 +479,38 @@ write_kw_bids_to_s3(df_out, "ALL_ACCOUNTS")
 for accnt in df_out["account_id"].unique():
     write_kw_bids_to_s3(df_out[df_out["account_id"] == accnt],accnt)
 #%%
+# 361640621
+# 1282030941525812
+# #%%
+# df_out[df_out["campaign_id"] == "361640621"]
+# #%%
+# I = df_out["campaign_id"] == "361640621"
+# r = df_out[I].sort_values(by="cost_raw").iloc[-1][kw_gp_idx_C]
+# kw_slc = (slice(None), slice(None), *r)
+# df_kw = df_rpc.loc[kw_slc]
+# df_kw
+# #%%
+# I = reporting_df["campaign_id"] == "361640621"
+# df = reporting_df[I].groupby("date")[["cost","rev"]].sum()
+# df["roas"] = df["rev"] / df["cost"]
+# # df["roas"].plot()
+# df[["cost","rev"]].plot()
+# #%%
+# I = reporting_df["adgroup_id"] == "1282030941525812"
+# df = reporting_df[I].groupby("date")[["cost","rev"]].sum()
+# df["roas"] = df["rev"] / df["cost"]
+# # df["roas"].plot()
+# df[["cost","rev"]].plot()
+# #%%
+# df = reporting_df.groupby(["campaign_id","date"]) \
+#     [["cost","rev"]] .sum()
+# df = df.groupby("campaign_id") \
+#     .apply(lambda df: 
+#                 df.reset_index("campaign_id",drop=True) \
+#                     .reindex(pd.date_range(TODAY-90*DAY,TODAY)) \
+#                         .rolling(7).sum()
+#     )
+# df["roas"] = df["rev"] / df["cost"]
+# for cid in df.index.unique("campaign_id"):
+#     df.loc[cid]["roas"].plot()
+# #%%

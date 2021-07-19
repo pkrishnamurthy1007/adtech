@@ -1,0 +1,11 @@
+git+ssh://git@github.com/healthcarecom/datascience-utils.git@amal
+matplotlib
+numpy
+pandas
+sshtunnel
+mysql-connector-python
+psycopg2-binary
+pendulum
+boto3
+ipykernel
+sklearn

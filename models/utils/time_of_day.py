@@ -329,3 +329,73 @@ def get_lowess_spline(df, date_field, revenue_field, show_plots=False):
         plt.show()
     
     return y_pred, norm_revenue_mean
+
+# ===================================== added 2021-07-15 ==============================================
+
+import typing
+def spread_outliers(S, percentile=97.5) -> typing.Iterable:
+    OUTTHRESH = np.percentile(S, percentile)
+    OUTI = S > OUTTHRESH
+    T = OUTI * OUTTHRESH + (1-OUTI) * S
+    T = (S.sum() / T.sum()) * T
+    assert abs(T.sum() - S.sum()) < 1e-10
+    return T
+def cma(x, window) -> typing.Iterable:
+    L = x.__len__()
+    CMAker = [1/window] * window
+    return np.convolve([*x, *x, *x], CMAker, mode="same")[L:-L]
+def ema(x, window) -> typing.Iterable:
+    """
+    \sum_{r^i} = s = 1 + r + r^2 + ....
+    s*r = r + r^2 + r^3 + ... = s-1
+    s * r = s - 1 ===> s = 1 / (1-r)
+    s - 1 = 1 / (1-r) - 1 = r / (1-r)
+    r \approx (window-1)/window
+
+    ema(X,t) = (1-r)*X[t] + r*ema(X,t-1)
+    """
+    L = x.__len__()
+    r = (window-1)/window
+    EMAker = (1-r) * 1/(1-r**window) * np.array([r**i for i in range(window)])
+    assert abs(EMAker.sum() - 1) < 1e-10
+    return np.convolve([*x, *x, *x], EMAker, mode="same")[L:-L]
+
+def add_spline(df, index_col, smooth_col, spline_k, spline_s, suffix='_spline'):
+    df = df.copy().reset_index()
+    spline = UnivariateSpline(
+        x=df[index_col], y=df[smooth_col], k=spline_k, s=spline_s)
+    df.set_index(index_col, inplace=True)
+    df[smooth_col + suffix] = spline(df.index)
+    return df
+
+def cema_transform(x,w,show_plots=False,window=16):
+    if show_plots:raise NotImplementedError
+    x = spread_outliers(x)
+    x_ema = ema(x*w, window) / ema(w, window)
+    x_cema = cma(x_ema*w, window) / cma(w, window)
+    return x_cema
+
+from models.utils.time_of_day import Lowess
+def lowess_transform(x, _, show_plots=False, frac=0.03, max_std_dev=5):
+    if show_plots: raise NotImplementedError
+    x = spread_outliers(x)
+    y_lowess = Lowess().fit_predict(np.arange(len(x)), x.values, frac=frac, max_std_dev=max_std_dev)
+    return y_lowess
+
+def add_modifiers(df, target_field, weight_field, transform_fn, fit_kwargs={}, show_plots=False):
+    if show_plots: raise NotImplementedError
+    weight = df[weight_field]
+    target = df[target_field]
+    weight_transform = transform_fn(weight,np.ones(len(weight)),show_plots=False,**fit_kwargs)
+    target_transform = transform_fn(target,weight,show_plots=False,**fit_kwargs)
+    
+    # target_wavg = (target_transform * weight_transform).sum() / weight_transform.sum()
+    target_wavg = target.mean() 
+    target_mod = target_transform / target_wavg
+    target_mod = target_mod * 20 // 1 / 20  # set to incs of 0.05
+    df["baseline"] = 1
+    df[f"{weight_field}_{transform_fn.__name__}"] = weight_transform
+    df[f"{target_field}_{transform_fn.__name__}"] = target_transform
+    df[f"{target_field}_{transform_fn.__name__}_mean"] = target_wavg
+    df[f"{target_field}_{transform_fn.__name__}_modifier"] = target_mod
+    return df

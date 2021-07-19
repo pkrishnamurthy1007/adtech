@@ -60,7 +60,7 @@ class TreeRPSClust:
         self.enc_min_cnt = enc_min_cnt
         self.plot = plot
 
-    def fit(self, X, _):
+    def fit(self, X, y=None, w=None):
         #         globals()["X"] = X
         assert X.index.names[-1] == "utc_dt"
 
@@ -79,30 +79,32 @@ class TreeRPSClust:
         ydf = X["rps"]
         wdf = X["sessions"]
 
-        ipydisp(Xdf[split_idx].isna().sum())
+        if self.plot:
+            ipydisp(Xdf[split_idx].isna().sum())
         for c in split_idx:
-            too_few_I = Xdf.groupby(c)["sessions"].transform(
-                sum) < self.enc_min_cnt
+            too_few_I = Xdf.groupby(c)["sessions"].transform(sum) < self.enc_min_cnt
             Xdf.loc[too_few_I, c] = np.NaN
-        ipydisp(Xdf[split_idx].isna().sum())
-        #         Xdf = Xdf.astype(str).fillna("")
-        Xdf = Xdf[split_idx]
+        if self.plot:
+            ipydisp(Xdf[split_idx].isna().sum())
 
         self.enc_1hot = sklearn.preprocessing.OneHotEncoder(
-            handle_unknown="ignore") .fit(Xdf)
+            handle_unknown="ignore") .fit(Xdf[split_idx])
         self.enc_features = [*self.enc_1hot.get_feature_names()]
-        X = self.enc_1hot.transform(Xdf)
-        print("|X|", X.shape)
-        y = ydf.fillna(0)
+        X = self.enc_1hot.transform(Xdf[split_idx])
+        y = ydf
         w = wdf
+
+        if self.plot:
+            print("|X|",X.shape,"|y|",y.shape,"|w|",w.shape)
 
         self.clf = sklearn.tree.DecisionTreeRegressor(
             min_weight_fraction_leaf=0.5/self.clusts) \
             .fit(X, y, sample_weight=wdf)
-        print(sklearn.tree.export_text(self.clf, feature_names=self.enc_features))
-
-        yhat = self.clf.predict(X)
-        print("Tree RPS MAE:", (y - yhat).abs().mean())
+        
+        if self.plot:
+            print(sklearn.tree.export_text(self.clf, feature_names=self.enc_features))
+            yhat = self.clf.predict(X)
+            print("Tree RPS MAE:", (y - yhat).abs().mean())
 
         return self
 

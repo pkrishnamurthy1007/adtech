@@ -1,0 +1,87 @@
+name: taboola-update
+
+on:
+  push:
+    branches: 
+      - workspace_amal
+    #   - main
+    paths:
+      - models/taboola/**
+      - .github/workflows/taboola_update.yml
+  # schedule:
+  # - cron: "0 12 * * *" # 8 am EST
+  workflow_dispatch:
+
+jobs:
+  update-bids:
+    runs-on: ubuntu-latest
+    env:
+      SLACK_CHANNEL: alert-test
+      # SLACK_CHANNEL: adtech-alerts
+      CHANNEL_SID: '!channel'
+      AMAL_SID: '@U01PPS0BLKY'
+      # CURTIS_SID: '@U01MYTF7X18'
+      # DAN_SID: '@U01R2UV56Q1'
+      
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          
+      - name: Activate conda env from .yml
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          environment-file: models/taboola/conda.yml
+
+      - name: Install pip packages
+        run: |
+          echo "${GIT_SSH_KEY}\n" > GIT_SSH_PTH
+          chmod 600 GIT_SSH_PTH
+          GIT_SSH_COMMAND="ssh -i GIT_SSH_PTH" \
+            pip install -r ${GITHUB_WORKSPACE}/models/taboola/requirements.txt
+          pip freeze
+        env:
+          GIT_SSH_KEY: ${{ secrets.GIT_SSH_KEY }}
+
+      - name: Compute updates
+        run: |
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          python ${GITHUB_WORKSPACE}/models/taboola/compute_bids_infer.py
+          python ${GITHUB_WORKSPACE}/models/taboola/compute_tod_mods.py
+
+      - name: Check updates
+        run: |
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          python ${GITHUB_WORKSPACE}/models/taboola/check_bids.py
+
+      - name: Apply updates
+        run: |
+          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
+          python ${GITHUB_WORKSPACE}/models/taboola/apply_bids.py
+
+      - name: Success notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: \
+            <${{ env.AMAL_SID }}> Taboola update SUCCESS!
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
+          SLACK_USERNAME: GithubActions
+
+      - name: Success notification
+        uses: rtCamp/action-slack-notify@v2
+        if: cancelled() || failure()
+        env:
+          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+          SLACK_MESSAGE: \
+            <${{ env.AMAL_SID }}> Taboola update FAILURE!
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
+          SLACK_USERNAME: GithubActions
+          SLACK_COLOR: 'danger'
