@@ -11,6 +11,9 @@ on:
   # schedule:
   # - cron: "0 12 * * 1" # 8 am EST - weekly on Monday
   workflow_dispatch:
+    inputs:
+      execution_date:
+        required: true
 
 jobs:
   update-tod-modifiers:

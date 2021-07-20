@@ -11,6 +11,9 @@ on:
   # schedule:
   # - cron: "0 12 * * *" # 8 am EST
   workflow_dispatch:
+    inputs:
+      execution_date:
+        required: true
 
 jobs:
   update-bids:

@@ -37,7 +37,7 @@ ipydisp(
 df_check[[
         # 'account_id', 'account_num', 'match', 'campaign_id',
         # 'adgroup_id', 'keyword_id', 
-        'campaign', 'adgroup', 'keyword',
+        # 'campaign', 'adgroup', 'keyword',
         # 'adgroup_norm', 'keyword_norm', 'geoI', 
         # 'max_cpc',
         "clicks_sum_7day_raw", "rev_sum_7day_raw", "cost_sum_7day_raw","roas_7day",
