@@ -407,6 +407,10 @@ df_bid["rpc_est"] = df_bid[kw_gp_idx_C] \
 # df["rpc_est_"] = df["rev"] / df["clicks"]
 # df
 #%%
+df_bid.sort_values(by="cost_sum_7day_raw",ascending=False).head(20)
+#%%
+df_bid[["max_cpc_old","max_cpc_new","cpc_observed"]].sort_values(by="max_cpc_new")
+#%%
 """
 cpc_t = cost_t/clicks_t
 roi_t = rpc_t / cpc_t
@@ -426,17 +430,9 @@ df_bid["cpc_observed"] = df_bid["cost"]/df_bid["clicks"]
 df_bid["cpc_target"] = df_bid["rpc_est"]/ROI_TARGET
 #apply bids change rules
 df_bid = df_bid.rename(columns={'latest_max_cpc': 'max_cpc_old'})
-
-"""
-NOTE:
-- 
-"""
-df_bid["bid_change"] = df_bid["cpc_target"] -  df_bid["cpc_observed"]
-df_bid["max_cpc_new"] = df_bid["max_cpc_old"] + df_bid["bid_change"]
-df_bid["perc_change"] = df_bid["max_cpc_new"] / df_bid["max_cpc_old"] - 1
-df_bid.loc[df_bid["perc_change"] > MAX_PUSH,"perc_change"] = MAX_PUSH
-df_bid.loc[df_bid["perc_change"] < MAX_CUT, "perc_change"] = MAX_CUT
-df_bid["max_cpc_new"] = df_bid["max_cpc_old"] * (1 + df_bid["perc_change"])
+df_bid["perc_change"] = (df_bid["cpc_target"] - df_bid["cpc_observed"]) / df_bid["cpc_observed"]
+df_bid["perc_change_clip"] = np.clip(df_bid["perc_change"], MAX_CUT, MAX_PUSH)
+df_bid["max_cpc_new"] = df_bid["max_cpc_old"] * (1 + df_bid["perc_change_clip"])
 df_bid.loc[df_bid["max_cpc_new"] < CPC_MIN, "max_cpc_new"] = CPC_MIN
 
 #round bids
