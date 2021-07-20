@@ -407,10 +407,6 @@ df_bid["rpc_est"] = df_bid[kw_gp_idx_C] \
 # df["rpc_est_"] = df["rev"] / df["clicks"]
 # df
 #%%
-df_bid.sort_values(by="cost_sum_7day_raw",ascending=False).head(20)
-#%%
-df_bid[["max_cpc_old","max_cpc_new","cpc_observed"]].sort_values(by="max_cpc_new")
-#%%
 """
 cpc_t = cost_t/clicks_t
 roi_t = rpc_t / cpc_t
