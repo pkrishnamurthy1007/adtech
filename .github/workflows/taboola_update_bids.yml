@@ -1,4 +1,4 @@
-name: taboola-update
+name: taboola-update-bids
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     #   - main
     paths:
       - models/taboola/**
-      - .github/workflows/taboola_update.yml
+      - .github/workflows/taboola_update_bids.yml
   # schedule:
   # - cron: "0 12 * * *" # 8 am EST
   workflow_dispatch:
