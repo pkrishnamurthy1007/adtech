@@ -54,7 +54,7 @@ df_check[[
         "max_cpc_old":          "cpc_old",
         "max_cpc_new":          "cpc_new",
     }) \
-    .sort_values(by="cost_sum_7day_raw",ascending=False) \
+    .sort_values(by="cost_7d",ascending=False) \
     .round(2) \
     .iloc[:20])
 #%%
