@@ -33,6 +33,20 @@ for c,d in zip(roasC,costC):
     df_check.loc[df_check[d].abs() < 1e-2,c] = np.NaN
 ipydisp(df_check[clicksC+revC+costC+roasC].agg(["sum","mean"]).round(2).T)
 
+ipydisp(
+df_check[[
+        # 'account_id', 'account_num', 'match', 'campaign_id',
+        # 'adgroup_id', 'keyword_id', 
+        # 'campaign', 'adgroup', 'keyword',
+        # 'adgroup_norm', 'keyword_norm', 'geoI', 
+        # 'max_cpc',
+        "clicks_sum_7day_raw", "rev_sum_7day_raw", "cost_sum_7day_raw","roas_7day",
+        "rpc_est", "cpc_target","cpc_observed",
+        "max_cpc_old", "max_cpc_new"]] \
+    .sort_values(by="cost_sum_7day_raw",ascending=False) \
+    .round(2) \
+    .iloc[:20])
+#%%
 df_check["max_cpc_old"] = np.maximum(df_check["max_cpc_old"],0.05)
 df_check["change"] = df_check["max_cpc_new"]/df_check["max_cpc_old"] - 1
 df_check["cost_t+1_est"] = (df_check["change"]+1) * df_check["cost_sum_7day_raw"]
@@ -118,8 +132,8 @@ if total_roas < 1: WARN |= True
 
 if 0    <= rel_roas_miss_delta < 0.25:  pass
 if 0.25 <= rel_roas_miss_delta:     WARN |= True
-# if 0.25 <= rel_roas_miss_delta < 2:     WARN |= True
-# if 2 <= rel_roas_miss_delta:            ERROR |= True
+# if 0.25 <= rel_roas_miss_delta < 1:     WARN |= True
+# if 1 <= rel_roas_miss_delta:            ERROR |= True
 
 import sys
 if ERROR:   sys.exit(1)

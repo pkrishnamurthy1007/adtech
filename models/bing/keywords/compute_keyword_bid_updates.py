@@ -267,7 +267,7 @@ df_bid = reporting_df[["bid_key",
                         "campaign_id", 'adgroup_id', "keyword_id",
                         "campaign", "adgroup", "keyword",
                         "adgroup_norm", "keyword_norm", 'geoI',
-                        "max_cpc", "latest_max_cpc", ]] \
+                        "latest_max_cpc", ]] \
     .drop_duplicates(subset=["bid_key"],keep="last")
 print("|df_bid|", df_bid.shape)
 # remove entries w/ NULL account metadata entries
@@ -421,44 +421,24 @@ TODO:
 
 """
 #### FINALIZE BIDS ####
-df_bid["cpc_observed"] = df_bid["cost"]/df_bid["clicks"]
 #find cpc target
-df_bid["cpc_target"] = df_bid["rpc_est"]/ROI_TARGET
+df_bid["cpc_observed"] = df_bid["cost"] / df_bid["clicks"]
+df_bid["cpc_target"] = df_bid["rpc_est"] / ROI_TARGET
 #apply bids change rules
 df_bid = df_bid.rename(columns={'latest_max_cpc': 'max_cpc_old'})
-
-"""
-NOTE:
-- 
-"""
-df_bid["bid_change"] = df_bid["cpc_target"] -  df_bid["cpc_observed"]
-df_bid["max_cpc_new"] = df_bid["max_cpc_old"] + df_bid["bid_change"]
-df_bid["perc_change"] = df_bid["max_cpc_new"] / df_bid["max_cpc_old"] - 1
-df_bid.loc[df_bid["perc_change"] > MAX_PUSH,"perc_change"] = MAX_PUSH
-df_bid.loc[df_bid["perc_change"] < MAX_CUT, "perc_change"] = MAX_CUT
-df_bid["max_cpc_new"] = df_bid["max_cpc_old"] * (1 + df_bid["perc_change"])
+df_bid["max_cpc_new"] = np.clip(
+    df_bid["cpc_target"],
+    df_bid["max_cpc_old"] * (1 + MAX_CUT),
+    df_bid["max_cpc_old"] * (1 + MAX_PUSH))
 df_bid.loc[df_bid["max_cpc_new"] < CPC_MIN, "max_cpc_new"] = CPC_MIN
-
 #round bids
 df_bid["max_cpc_new"] = df_bid["max_cpc_new"].round(2) 
-
 #record change
 df_bid["bid_change"] = df_bid["max_cpc_new"] - df_bid["max_cpc_old"]
 
 #prepare output
 df_out = df_bid
-df_out = df_out.rename(
-    columns={
-        "clicks": "clicks_kw_group",
-        "rev": "rev_kw_group",
-        "cost": "cost_kw_group",
-    })
-
-df_out = df_out.sort_values("clicks_kw_group",ascending = False)
-
-df_out["rev_kw_group"] = df_out["rev_kw_group"].round(2)  
-df_out["cost_kw_group"] = df_out["cost_kw_group"].round(2)
-
+df_out = df_out.sort_values("cost_sum_7day_raw",ascending=False)
 def write_kw_bids_to_s3(df,accnt):
     accnt_dir = f"{OUTPUT_DIR}/{accnt}"
     os.makedirs(accnt_dir, exist_ok=True)
@@ -466,7 +446,7 @@ def write_kw_bids_to_s3(df,accnt):
     bids_fpth = f"{OUTPUT_DIR}/{accnt}/{bids_fnm}"
     df.to_csv(bids_fpth, index=False, encoding='utf-8')
 
-    #### WRITE OUTPUT TO S3 ####    
+    #### WRITE OUTPUT TO S3 ####
     s3_client = boto3.client('s3')
     response = s3_client.upload_file(
         bids_fpth,
@@ -478,6 +458,13 @@ def write_kw_bids_to_s3(df,accnt):
 write_kw_bids_to_s3(df_out, "ALL_ACCOUNTS")
 for accnt in df_out["account_id"].unique():
     write_kw_bids_to_s3(df_out[df_out["account_id"] == accnt],accnt)
+#%%
+"""
+rps = rpl * lpc
+    = rpl_short * rpl_mod_long * lpc_short * lpc_mod_long
+tree rollup
+rollup through time
+"""
 #%%
 # 361640621
 # 1282030941525812

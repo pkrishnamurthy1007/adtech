@@ -33,6 +33,76 @@ rps_df = translate_taboola_vals(rps_df)
 rps_df = rps_df_postprocess(rps_df)
 rps_df_bkp = rps_df.copy()
 #%%
+import sklearn.tree
+import sklearn.preprocessing
+class TreeRPSClust:
+    def __init__(self, clusts=8, cma=7, enc_min_cnt=100, plot=True):
+        self.clusts = clusts
+        self.cma = cma
+        self.enc_min_cnt = enc_min_cnt
+        self.plot = plot
+
+    def fit(self, X, y=None, w=None):
+        #         globals()["X"] = X
+        assert X.index.names[-1] == "utc_dt"
+
+        split_idx = X.index.names[:-1]
+
+        def translate(df, td):
+            tdf = df.copy().reset_index()
+            tdf['utc_dt'] = tdf['utc_dt'] + td
+            return tdf.set_index(df.index.names)
+        X = pd.concat((translate(X[["sessions", "revenue"]], n*DAY) / self.cma
+                       for n in range(self.cma))) \
+            .sum(level=[X.index.names])
+        X["rps"] = X["revenue"] / X["sessions"]
+
+        Xdf = X .reset_index()
+        ydf = X["rps"]
+        wdf = X["sessions"]
+
+        if self.plot:
+            ipydisp(Xdf[split_idx].isna().sum())
+        for c in split_idx:
+            too_few_I = Xdf.groupby(c)["sessions"].transform(sum) < self.enc_min_cnt
+            Xdf.loc[too_few_I, c] = np.NaN
+        if self.plot:
+            ipydisp(Xdf[split_idx].isna().sum())
+
+        self.enc_1hot = sklearn.preprocessing.OneHotEncoder(
+            handle_unknown="ignore") .fit(Xdf[split_idx])
+        self.enc_features = [*self.enc_1hot.get_feature_names()]
+        X = self.enc_1hot.transform(Xdf[split_idx])
+        y = ydf
+        w = wdf
+
+        if self.plot:
+            print("|X|",X.shape,"|y|",y.shape,"|w|",w.shape)
+
+        # self.clf = sklearn.tree.DecisionTreeRegressor(
+        #     min_weight_fraction_leaf=0.5/self.clusts) \
+        #     .fit(X, y, sample_weight=wdf)
+
+        self.clf = sklearn.tree.DecisionTreeRegressor() \
+            .fit(X, y, sample_weight=wdf)
+        
+        if self.plot:
+            print(sklearn.tree.export_text(self.clf, feature_names=self.enc_features))
+            yhat = self.clf.predict(X)
+            print("Tree RPS MAE:", (y - yhat).abs().mean())
+
+        return self
+
+    def transform(self, X):
+        assert X.index.names[-1] == "utc_dt"
+        Xdf = X .reset_index()[X.index.names].iloc[:, :-1]
+        X = self.enc_1hot.transform(Xdf)
+        print("|X|", X.shape)
+        return self.clf.apply(X)
+
+    def fit_transform(self, X, _):
+        return self.fit(X, _).transform(X)
+
 rps_df = rps_df_bkp.copy()
 rps_df = rps_df.reset_index()
 fitI = rps_df['utc_dt'].dt.date < eval_date
@@ -41,13 +111,43 @@ fitI.index = rps_df.index
 import models.taboola.utils
 importlib.reload(models.taboola.utils)
 TaboolaRPSEst = models.taboola.utils.TaboolaRPSEst
-clusterer = TaboolaRPSEst(clusts=32,enc_min_cnt=30).fit(
+clusterer = TreeRPSClust(clusts=32,enc_min_cnt=10).fit(
     rps_df[fitI].set_index([*split_cols, "utc_dt"]), None)
 rps_df.loc[fitI, "clust"] = clusterer.transform(
     rps_df[fitI].set_index([*split_cols, "utc_dt"]))
 rps_df.loc[~fitI, "clust"] = clusterer.transform(
     rps_df[~fitI].set_index([*split_cols, "utc_dt"]))
 rps_df["clust"] = rps_df["clust"].fillna(-1)
+#%%
+self = clusterer
+X = rps_df.set_index([*split_cols, "utc_dt"])
+Xdf = X
+assert X.index.names[-1] == "utc_dt"
+X = X .reset_index()[X.index.names].iloc[:, :-1]
+X = self.enc_1hot.transform(X)
+print("|X|", X.shape)
+P = clusterer.clf.decision_path(X)
+P.shape
+#%%
+Pdf = pd.DataFrame(P.todense(),index=Xdf.index)
+revenue_Pdf = Pdf * Xdf[["revenue"]].values
+session_Pdf = Pdf * Xdf[["sessions"]].values
+#%%
+revenue_Pdf.groupby("utc_dt").sum()
+#%%
+session_Pdf.groupby("utc_dt").sum()
+#%%
+CRD_l = [(n,l,1) for n,l in enumerate(self.clf.tree_.children_left)     if l > 0]
+CRD_r = [(n,r,1) for n,r in enumerate(self.clf.tree_.children_right)    if r >= 0]
+C,R,D = zip(*[*CRD_l,*CRD_r])
+len(C),len(R),len(D)
+
+import scipy.sparse
+
+A_child = scipy.sparse.csr_matrix((D,(R,C))).todense()
+A_child
+# A_parent = scipy.sparse.csr_matrix()
+#%%
 rps_df["rps_clust"] = rps_df \
     .groupby(["clust", "utc_dt"])["rps"].transform(get_wavg_by(rps_df, "sessions"))
 daily_rps_mae = (rps_df["rps"] - rps_df["rps_clust"]).abs()
