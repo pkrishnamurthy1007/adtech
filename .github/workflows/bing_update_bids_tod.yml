@@ -3,8 +3,9 @@ name: bing-update-bids-tod
 on:
   push:
     branches: 
-      - workspace_amal
+      # - workspace_amal
     #   - main
+      - workflow_test
     paths:
       - models/bing/time_of_day/**
       - .github/workflows/bing_update_bids_tod.yml
