@@ -127,15 +127,52 @@ X = X .reset_index()[X.index.names].iloc[:, :-1]
 X = self.enc_1hot.transform(X)
 print("|X|", X.shape)
 P = clusterer.clf.decision_path(X)
-P.shape
 #%%
 Pdf = pd.DataFrame(P.todense(),index=Xdf.index)
 revenue_Pdf = Pdf * Xdf[["revenue"]].values
 session_Pdf = Pdf * Xdf[["sessions"]].values
+leads_Pdf   = Pdf * Xdf[["leads"]].values.astype(int)
 #%%
-revenue_Pdf.groupby("utc_dt").sum()
+df = Pdf * session_Pdf.groupby("utc_dt").transform(sum)
+df_running_max = df.copy()
+H,W = df_running_max.shape
+for ci in reversed(range(W-1)):
+    df_running_max.iloc[:,ci] = np.maximum(df_running_max.iloc[:,ci],df_running_max.iloc[:,ci+1])
+df_new = df - df_running_max.shift(-1,axis=1).fillna(0)
+df_new = np.maximum(0,df_new)
 #%%
-session_Pdf.groupby("utc_dt").sum()
+self.clf.tree_.impurity.round(3)
+#%%
+df_new.sort_index(level="utc_dt")
+#%%
+df_running_max.iloc[:, ci+1]
+#%%
+df.values[:,0:-1] = df.values[:,0:-1] - df.values[:,1:]
+df
+#%%
+df.sum(axis=1)
+#%%
+leaf_indices = clusterer.clf.apply(X)
+DRC = [(1,r,li) for r,li in enumerate(leaf_indices)]
+D,R,C = zip(*DRC)
+import scipy.sparse
+L = scipy.sparse.csr_matrix((D,(R,C)))
+#%%
+Ldf = pd.DataFrame(L.todense(),index=Xdf.index).astype(int)
+revenue_Ldf = Ldf * Xdf[["revenue"]].values
+session_Ldf = Ldf * Xdf[["sessions"]].values
+leads_Ldf   = Ldf * Xdf[["leads"]].values.astype(int)
+#%%
+revenue_Pdf.groupby("utc_dt")
+#%%
+self.clf.tree_.children_left
+#%%
+self.clf.tree_.children_right
+#%%
+Pdf
+#%%
+Pdf * session_Pdf.groupby("utc_dt").sum()
+
 #%%
 CRD_l = [(n,l,1) for n,l in enumerate(self.clf.tree_.children_left)     if l > 0]
 CRD_r = [(n,r,1) for n,r in enumerate(self.clf.tree_.children_right)    if r >= 0]
