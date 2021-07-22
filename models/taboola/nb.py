@@ -132,25 +132,108 @@ Pdf = pd.DataFrame(P.todense(),index=Xdf.index)
 revenue_Pdf = Pdf * Xdf[["revenue"]].values
 session_Pdf = Pdf * Xdf[["sessions"]].values
 leads_Pdf   = Pdf * Xdf[["leads"]].values.astype(int)
+revenue_agg_Pdf = Pdf * revenue_Pdf.groupby("utc_dt").transform(sum)
+session_agg_Pdf = Pdf * session_Pdf.groupby("utc_dt").transform(sum)
+leads_agg_Pdf   = Pdf * leads_Pdf.groupby("utc_dt").transform(sum)
+
+SAMPLE_THRESH = 100
+I = (~(session_agg_Pdf < SAMPLE_THRESH)).iloc[:,::-1].idxmax(axis=1)
+I = np.eye(self.clf.tree_.node_count).astype(bool)[I]
+
+rev_rollup = (revenue_agg_Pdf * I).sum(axis=1) 
+sess_rollup = (session_agg_Pdf * I).sum(axis=1)
+rps_rollup = rev_rollup / sess_rollup
+rps_rollup
 #%%
-df = Pdf * session_Pdf.groupby("utc_dt").transform(sum)
-df_running_max = df.copy()
-H,W = df_running_max.shape
-for ci in reversed(range(W-1)):
-    df_running_max.iloc[:,ci] = np.maximum(df_running_max.iloc[:,ci],df_running_max.iloc[:,ci+1])
-df_new = df - df_running_max.shift(-1,axis=1).fillna(0)
-df_new = np.maximum(0,df_new)
+def running_suffix_max(df):
+    df_running_max = df.copy()
+    H, W = df_running_max.shape
+    for ci in reversed(range(W-1)):
+        df_running_max.iloc[:, ci] = np.maximum(
+            df_running_max.iloc[:, ci], df_running_max.iloc[:, ci+1])
+    return df_running_max
 #%%
-self.clf.tree_.impurity.round(3)
+revenue_contrib_Pdf = revenue_agg_Pdf - running_suffix_max(revenue_agg_Pdf).shift(-1,axis=1).fillna(0)
+session_contrib_Pdf = session_agg_Pdf - running_suffix_max(session_agg_Pdf).shift(-1,axis=1).fillna(0)
+leads_contrib_Pdf   = leads_agg_Pdf - running_suffix_max(leads_agg_Pdf).shift(-1,axis=1).fillna(0)
+revenue_contrib_Pdf = np.maximum(0,revenue_contrib_Pdf)
+session_contrib_Pdf = np.maximum(0,session_contrib_Pdf)
+leads_contrib_Pdf   = np.maximum(0,leads_contrib_Pdf)
 #%%
-df_new.sort_index(level="utc_dt")
+session_contrib_Pdf
+"""
+total_sess = 0
+total_rev = 0
+while total_sess < THRESH - scan up through decision tree path:
+    rollup_factor = min(n.sessions,THRESH - total_sess) / n.sessions
+    total_sess += n.sessions * rollup_factor
+    total_rev += n.rev * rollup_factor
+ROAS = total_rev / total_sess
+"""
+H,W = session_contrib_Pdf.shape
+total_sess = session_contrib_Pdf.iloc[:,-1]
+total_rev  = revenue_contrib_Pdf.iloc[:,-1]
+import tqdm
+for ni in tqdm.tqdm(reversed(range(W))):
+    n_sessions = session_contrib_Pdf.iloc[:, ni]
+    n_revenue = revenue_contrib_Pdf.iloc[:,ni]
+    rollup_factor = np.minimum(n_sessions, SAMPLE_THRESH - total_sess) / n_sessions
+    total_sess[rollup_factor > 0]   += (n_sessions * rollup_factor)[rollup_factor > 0]
+    total_rev[rollup_factor > 0]    += (n_revenue * rollup_factor)[rollup_factor > 0] 
+total_rev / total_sess
 #%%
-df_running_max.iloc[:, ci+1]
-#%%
-df.values[:,0:-1] = df.values[:,0:-1] - df.values[:,1:]
-df
-#%%
-df.sum(axis=1)
+"""
+NOTE: dont actually think this owrks
+best_path (n,):
+    if n == NULL:
+        return INF,NAN
+    if n.date < lookback start:
+        return INF,NAN
+    else
+        OPTS = [
+        1. rollup over time
+            best_path_time_rollup = best_path(n-7*DAY)
+             => MSE(*best_path_time_rollup,n)
+                ->
+                RPS(*best_path_time_rollup,n)
+        2. rollup over tree
+            best_path_tree_rollup = best_path(n-7*DAY)
+             => MSE(*best_path_tree_rollup,n)
+                ->
+                RPS(*best_path_tree_rollup,n)
+        
+    return total_rev + n.sessopn
+"""
+"""
+.   .   .   .   .   .   .   
+
+.   .   .   .   .   .   .
+
+.   .   .   .   .   .   V
+
+.   .   .   .   .   . < V
+                    ^   ^
+.   .   .   .   .   V   V
+
+
+BFS(ish) btd
+- 1 condition - we will not add a node to Q unless both its children have
+    been visited - this is to maintain a "staircase" exploration pattern
+V = {}
+Q = [leaf] # 
+while Q and TOTAL_SESS(V) < THRESH
+    n = pop minimum n from Q by MSE(*V,n)
+    V += n
+    fringe = [n.parent for n in V] + [n-7*day for n in V] 
+            + bottom border + right border
+    fringe -= V
+    fringe = filter(fringe,n in fringe twice)
+    fringe = fringe - Q
+    Q += fringe
+
+return RPC(V)
+
+"""
 #%%
 leaf_indices = clusterer.clf.apply(X)
 DRC = [(1,r,li) for r,li in enumerate(leaf_indices)]
