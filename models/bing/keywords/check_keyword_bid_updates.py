@@ -44,17 +44,17 @@ df_check[[
         "rpc_est", "cpc_target","cpc_observed",
         "max_cpc_old", "max_cpc_new"]] \
     .rename(columns={
-        "clicks_sum_7day_raw":  "clicks_7d",
-        "rev_sum_7day_raw":     "rev_7d",
-        "cost_sum_7day_raw":    "cost_7d",
-        "roas_7day":            "roas_7d",
+        "clicks_sum_7day_raw":  "clicks",
+        "rev_sum_7day_raw":     "rev",
+        "cost_sum_7day_raw":    "cost",
+        "roas_7day":            "roas",
         "rpc_est":              "rpc",
-        "cpc_target":           "cpc_target",
+        "cpc_target":           "cpc_goal",
         "cpc_observed":         "cpc_obs",
         "max_cpc_old":          "cpc_old",
         "max_cpc_new":          "cpc_new",
     }) \
-    .sort_values(by="cost_7d",ascending=False) \
+    .sort_values(by="cost",ascending=False) \
     .round(2) \
     .iloc[:20])
 #%%

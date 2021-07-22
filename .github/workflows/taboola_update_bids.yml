@@ -3,8 +3,9 @@ name: taboola-update-bids
 on:
   push:
     branches: 
-      - workspace_amal
+      # - workspace_amal
     #   - main
+      - workflow_test
     paths:
       - models/taboola/**
       - .github/workflows/taboola_update_bids.yml
