@@ -33,76 +33,6 @@ rps_df = translate_taboola_vals(rps_df)
 rps_df = rps_df_postprocess(rps_df)
 rps_df_bkp = rps_df.copy()
 #%%
-import sklearn.tree
-import sklearn.preprocessing
-class TreeRPSClust:
-    def __init__(self, clusts=8, cma=7, enc_min_cnt=100, plot=True):
-        self.clusts = clusts
-        self.cma = cma
-        self.enc_min_cnt = enc_min_cnt
-        self.plot = plot
-
-    def fit(self, X, y=None, w=None):
-        #         globals()["X"] = X
-        assert X.index.names[-1] == "utc_dt"
-
-        split_idx = X.index.names[:-1]
-
-        def translate(df, td):
-            tdf = df.copy().reset_index()
-            tdf['utc_dt'] = tdf['utc_dt'] + td
-            return tdf.set_index(df.index.names)
-        X = pd.concat((translate(X[["sessions", "revenue"]], n*DAY) / self.cma
-                       for n in range(self.cma))) \
-            .sum(level=[X.index.names])
-        X["rps"] = X["revenue"] / X["sessions"]
-
-        Xdf = X .reset_index()
-        ydf = X["rps"]
-        wdf = X["sessions"]
-
-        if self.plot:
-            ipydisp(Xdf[split_idx].isna().sum())
-        for c in split_idx:
-            too_few_I = Xdf.groupby(c)["sessions"].transform(sum) < self.enc_min_cnt
-            Xdf.loc[too_few_I, c] = np.NaN
-        if self.plot:
-            ipydisp(Xdf[split_idx].isna().sum())
-
-        self.enc_1hot = sklearn.preprocessing.OneHotEncoder(
-            handle_unknown="ignore") .fit(Xdf[split_idx])
-        self.enc_features = [*self.enc_1hot.get_feature_names()]
-        X = self.enc_1hot.transform(Xdf[split_idx])
-        y = ydf
-        w = wdf
-
-        if self.plot:
-            print("|X|",X.shape,"|y|",y.shape,"|w|",w.shape)
-
-        # self.clf = sklearn.tree.DecisionTreeRegressor(
-        #     min_weight_fraction_leaf=0.5/self.clusts) \
-        #     .fit(X, y, sample_weight=wdf)
-
-        self.clf = sklearn.tree.DecisionTreeRegressor() \
-            .fit(X, y, sample_weight=wdf)
-        
-        if self.plot:
-            print(sklearn.tree.export_text(self.clf, feature_names=self.enc_features))
-            yhat = self.clf.predict(X)
-            print("Tree RPS MAE:", (y - yhat).abs().mean())
-
-        return self
-
-    def transform(self, X):
-        assert X.index.names[-1] == "utc_dt"
-        Xdf = X .reset_index()[X.index.names].iloc[:, :-1]
-        X = self.enc_1hot.transform(Xdf)
-        print("|X|", X.shape)
-        return self.clf.apply(X)
-
-    def fit_transform(self, X, _):
-        return self.fit(X, _).transform(X)
-
 rps_df = rps_df_bkp.copy()
 rps_df = rps_df.reset_index()
 fitI = rps_df['utc_dt'].dt.date < eval_date
@@ -110,14 +40,15 @@ fitI.index = rps_df.index
 
 import models.taboola.utils
 importlib.reload(models.taboola.utils)
-TaboolaRPSEst = models.taboola.utils.TaboolaRPSEst
-clusterer = TreeRPSClust(clusts=32,enc_min_cnt=10).fit(
+# TaboolaRPSEst = models.taboola.utils.TaboolaRPSEst
+clusterer = TaboolaRPSEst(clusts=None,enc_min_cnt=10).fit(
     rps_df[fitI].set_index([*split_cols, "utc_dt"]), None)
 rps_df.loc[fitI, "clust"] = clusterer.transform(
     rps_df[fitI].set_index([*split_cols, "utc_dt"]))
 rps_df.loc[~fitI, "clust"] = clusterer.transform(
     rps_df[~fitI].set_index([*split_cols, "utc_dt"]))
 rps_df["clust"] = rps_df["clust"].fillna(-1)
+
 #%%
 self = clusterer
 X = rps_df.set_index([*split_cols, "utc_dt"])
@@ -140,10 +71,14 @@ SAMPLE_THRESH = 100
 I = (~(session_agg_Pdf < SAMPLE_THRESH)).iloc[:,::-1].idxmax(axis=1)
 I = np.eye(self.clf.tree_.node_count).astype(bool)[I]
 
-rev_rollup = (revenue_agg_Pdf * I).sum(axis=1) 
+rev_rollup = (revenue_agg_Pdf * I).sum(axis=1)
 sess_rollup = (session_agg_Pdf * I).sum(axis=1)
 rps_rollup = rev_rollup / sess_rollup
 rps_rollup
+#%%
+rev_rollup
+#%%
+sess_rollup
 #%%
 def running_suffix_max(df):
     df_running_max = df.copy()
@@ -152,15 +87,14 @@ def running_suffix_max(df):
         df_running_max.iloc[:, ci] = np.maximum(
             df_running_max.iloc[:, ci], df_running_max.iloc[:, ci+1])
     return df_running_max
-#%%
+
 revenue_contrib_Pdf = revenue_agg_Pdf - running_suffix_max(revenue_agg_Pdf).shift(-1,axis=1).fillna(0)
 session_contrib_Pdf = session_agg_Pdf - running_suffix_max(session_agg_Pdf).shift(-1,axis=1).fillna(0)
 leads_contrib_Pdf   = leads_agg_Pdf - running_suffix_max(leads_agg_Pdf).shift(-1,axis=1).fillna(0)
 revenue_contrib_Pdf = np.maximum(0,revenue_contrib_Pdf)
 session_contrib_Pdf = np.maximum(0,session_contrib_Pdf)
 leads_contrib_Pdf   = np.maximum(0,leads_contrib_Pdf)
-#%%
-session_contrib_Pdf
+
 """
 total_sess = 0
 total_rev = 0
@@ -174,12 +108,20 @@ H,W = session_contrib_Pdf.shape
 total_sess = session_contrib_Pdf.iloc[:,-1]
 total_rev  = revenue_contrib_Pdf.iloc[:,-1]
 import tqdm
-for ni in tqdm.tqdm(reversed(range(W))):
+for ni in tqdm.tqdm(reversed(session_contrib_Pdf.columns[:-1])):
     n_sessions = session_contrib_Pdf.iloc[:, ni]
     n_revenue = revenue_contrib_Pdf.iloc[:,ni]
-    rollup_factor = np.minimum(n_sessions, SAMPLE_THRESH - total_sess) / n_sessions
-    total_sess[rollup_factor > 0]   += (n_sessions * rollup_factor)[rollup_factor > 0]
-    total_rev[rollup_factor > 0]    += (n_revenue * rollup_factor)[rollup_factor > 0] 
+    rollup_factor = np.clip((SAMPLE_THRESH - total_sess) / n_sessions, 0, 1).fillna(0)
+    total_sess   += n_sessions * rollup_factor
+    total_rev    += n_revenue * rollup_factor 
+
+Xdf["rps_rollup"] = total_rev / total_sess
+Xdf["rps_rollup"]
+#%%
+total_sess
+#%%
+total_rev
+#%%
 total_rev / total_sess
 #%%
 """
@@ -203,6 +145,37 @@ best_path (n,):
                 RPS(*best_path_tree_rollup,n)
         
     return total_rev + n.sessopn
+"""
+"""
+metaparams = time decay \alpha - heirarchy decay \beta
+DP rollup:
+- define recursion as fn of:
+    - node
+    - date
+    - sessions rolled up 
+- IF sessions > SESS_THRESH: 
+    return [{
+        sessions    = 0
+        revenue     = 0
+    }]
+- IF node == NULL
+    return MSE == INF 
+- IF date < lookback period
+    return MSE == INF
+- ELSE:
+    1: try DP rollup at node parent `p` 
+        rollup1 = [* \beta * DP_rollup(`p`,date,sessions+n.session),
+                    {sessions = n.sessions, revenue = n.revenue}]
+    2: for every node `m` in decision path downstream of `n` try rollup at `m` - 7*DAY
+        rollup2_seq = [
+            [   * \alpha**7 * DP_rollup(`m`,date-7*DAY,sessions+n.sessions)
+                {sessions = n.sessions, revenue = n.revenue}]
+            for m in decision path
+        ]
+    return MIN([rollup1,*rollup2_seq], by = lambda rollup: MSE(rollup))
+
+best_rollup = DP_rollup(decisoin path leaf `l`, TODAY, 0)
+RPS = sum(best_rollup.revenue) / sum(best_rollup.sessions)
 """
 """
 .   .   .   .   .   .   .   
