@@ -1,4 +1,4 @@
-name: taboola-update-bids
+name: taboola-apply-bids
 
 on:
   push:
@@ -8,10 +8,10 @@ on:
       - workflow_test
     paths:
       - models/taboola/**
-      - .github/workflows/taboola_update_bids.yml
+      - .github/workflows/taboola_apply_bids.yml
   
   schedule:
-  - cron: "0 12 * * *" # 8 am EST
+  - cron: "0 * * * *" # hourly
   
   workflow_dispatch:
     inputs:
@@ -19,7 +19,7 @@ on:
         required: true
 
 jobs:
-  update-bids:
+  apply-bids:
     runs-on: ubuntu-latest
     env:
       SLACK_CHANNEL: alert-test
@@ -54,28 +54,17 @@ jobs:
         env:
           GIT_SSH_KEY: ${{ secrets.GIT_SSH_KEY }}
 
-      - name: Perform ETL
+      - name: Apply bids
         run: |
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
-          python ${GITHUB_WORKSPACE}/models/taboola/etl.py
-      
-      - name: Compute bids
-        run: |
-          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
-          python ${GITHUB_WORKSPACE}/models/taboola/compute_bids_infer.py
-          python ${GITHUB_WORKSPACE}/models/taboola/compute_tod_mods.py
-
-      - name: Check bids
-        run: |
-          export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
-          python ${GITHUB_WORKSPACE}/models/taboola/check_bids.py
+          python ${GITHUB_WORKSPACE}/models/taboola/apply_bids.py
 
       - name: Success notification
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
           SLACK_MESSAGE: \
-            <${{ env.AMAL_SID }}> Taboola bid compute SUCCESS!
+            <${{ env.AMAL_SID }}> Taboola bid application SUCCESS!
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
@@ -86,7 +75,7 @@ jobs:
         env:
           SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
           SLACK_MESSAGE: \
-            <${{ env.AMAL_SID }}> Taboola bid compute FAILURE!
+            <${{ env.AMAL_SID }}> Taboola bid application FAILURE!
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions

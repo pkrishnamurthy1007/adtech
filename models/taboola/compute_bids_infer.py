@@ -17,7 +17,6 @@ import models.taboola.utils
 importlib.reload(models.taboola.utils)
 TaboolaRPSEst = models.taboola.utils.TaboolaRPSEst
 clusterer: TaboolaRPSEst = joblib.load(MODEL_PTH)
-
 rps_est = clusterer.predict(rps_df.set_index([*split_cols,"utc_dt"]))
 rps_df["rps_est"] = rps_est
 
@@ -41,6 +40,8 @@ client = TaboolaClient(**TABOOLA_HC_CREDS)
 acct_service = AccountService(client)
 accnts = acct_service.list()["results"]
 id2accnt = {a["account_id"]: a for a in accnts}
+
+# TODO: pull from redshift
 
 camps = []
 for aid in [TEST_ACCNT_ID,O65_ACCNT_ID]:
@@ -102,5 +103,6 @@ updatedf = pd.concat((
 updatedf.columns = ["campaign_id","account_id","update"]
 updatedf["date"] = TODAY
 updatedf["datetime"] = NOW
-
+updatedf
+#%%
 upload_taboola_updates_to_redshift(updatedf)

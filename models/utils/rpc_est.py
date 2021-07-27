@@ -54,7 +54,7 @@ class AggRPSClust:
 
 
 class TreeRPSClust:
-    def __init__(self, clusts=CLUSTS, cma=7, enc_min_cnt=100, plot=True):
+    def __init__(self, clusts=None, cma=7, enc_min_cnt=100, plot=True):
         self.clusts = clusts
         self.cma = cma
         self.enc_min_cnt = enc_min_cnt
@@ -97,9 +97,13 @@ class TreeRPSClust:
         if self.plot:
             print("|X|",X.shape,"|y|",y.shape,"|w|",w.shape)
 
-        self.clf = sklearn.tree.DecisionTreeRegressor(
-            min_weight_fraction_leaf=0.5/self.clusts) \
-            .fit(X, y, sample_weight=wdf)
+        if self.clusts:
+            self.clf = sklearn.tree.DecisionTreeRegressor(
+                min_weight_fraction_leaf=0.5/self.clusts) \
+                .fit(X, y, sample_weight=wdf)
+        else:
+            self.clf = sklearn.tree.DecisionTreeRegressor() \
+                .fit(X, y, sample_weight=wdf)
         
         if self.plot:
             print(sklearn.tree.export_text(self.clf, feature_names=self.enc_features))
@@ -109,16 +113,71 @@ class TreeRPSClust:
         return self
 
     def transform(self, X):
-        #         globals()["X"] = X
         assert X.index.names[-1] == "utc_dt"
         Xdf = X .reset_index()[X.index.names].iloc[:, :-1]
-#         X = self.enc_1hot.transform(Xdf.astype(str).fillna(""))
         X = self.enc_1hot.transform(Xdf)
         print("|X|", X.shape)
         return self.clf.apply(X)
 
     def fit_transform(self, X, _):
         return self.fit(X, _).transform(X)
+
+    def rollup(self,X,y,w,sample_thresh=100):
+        Xdf = X
+        X = X .reset_index()[X.index.names].iloc[:, :-1]
+        X = self.enc_1hot.transform(X)
+        print("|X|", X.shape)
+        P = self.clf.decision_path(X)
+        
+        Pdf = pd.DataFrame(P.todense(),index=Xdf.index)
+        y_Pdf = Pdf * y.values.reshape(-1,1)
+        w_Pdf = Pdf * w.values.reshape(-1,1)
+        y_agg_Pdf = Pdf * y_Pdf.groupby("utc_dt").transform(sum)
+        w_agg_Pdf = Pdf * w_Pdf.groupby("utc_dt").transform(sum)
+        
+        # SAMPLE_THRESH = 100
+        # I = (~(session_agg_Pdf < SAMPLE_THRESH)).iloc[:,::-1].idxmax(axis=1)
+        # I = np.eye(self.clf.tree_.node_count).astype(bool)[I]
+
+        # rev_rollup = (revenue_agg_Pdf * I).sum(axis=1)
+        # sess_rollup = (session_agg_Pdf * I).sum(axis=1)
+        # rps_rollup = rev_rollup / sess_rollup
+        # rps_rollup
+        
+        def running_suffix_max(df):
+            df_running_max = df.copy()
+            H, W = df_running_max.shape
+            for ci in reversed(range(W-1)):
+                df_running_max.iloc[:, ci] = np.maximum(
+                    df_running_max.iloc[:, ci], df_running_max.iloc[:, ci+1])
+            return df_running_max
+
+        y_contrib_Pdf = y_agg_Pdf - running_suffix_max(y_agg_Pdf).shift(-1,axis=1).fillna(0)
+        w_contrib_Pdf = w_agg_Pdf - running_suffix_max(w_agg_Pdf).shift(-1,axis=1).fillna(0)
+        y_contrib_Pdf = np.maximum(0,y_contrib_Pdf)
+        w_contrib_Pdf = np.maximum(0,w_contrib_Pdf)
+
+        """
+        total_sess = 0
+        total_rev = 0
+        while total_sess < THRESH - scan up through decision tree path:
+            rollup_factor = min(n.sessions,THRESH - total_sess) / n.sessions
+            total_sess += n.sessions * rollup_factor
+            total_rev += n.rev * rollup_factor
+        ROAS = total_rev / total_sess
+        """
+        H,W = w_contrib_Pdf.shape
+        total_w = w_contrib_Pdf.iloc[:,-1]
+        total_y  = y_contrib_Pdf.iloc[:,-1]
+        import tqdm
+        for ni in tqdm.tqdm(reversed(w_contrib_Pdf.columns[:-1])):
+            wni = w_contrib_Pdf.iloc[:, ni]
+            yni = y_contrib_Pdf.iloc[:,ni]
+            rollup_factor = np.clip((sample_thresh - total_w) / wni, 0, 1).fillna(0)
+            total_w += wni * rollup_factor
+            total_y += yni * rollup_factor 
+
+        return total_y
 
 
 COKPI = "COKPI"

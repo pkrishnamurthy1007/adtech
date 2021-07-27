@@ -13,7 +13,7 @@ rps_df = translate_taboola_vals(rps_df)
 rps_df = rps_df_postprocess(rps_df)
 rps_df = rps_df.reset_index()
 
-clusterer = TaboolaRPSEst(clusts=32,enc_min_cnt=30).fit(
+clusterer = TaboolaRPSEst(clusts=None,enc_min_cnt=10).fit(
     rps_df.set_index([*split_cols, "utc_dt"]), None)
 
 import joblib

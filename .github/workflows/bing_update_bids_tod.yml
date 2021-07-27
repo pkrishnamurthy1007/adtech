@@ -9,8 +9,10 @@ on:
     paths:
       - models/bing/time_of_day/**
       - .github/workflows/bing_update_bids_tod.yml
-  # schedule:
-  # - cron: "0 12 * * 1" # 8 am EST - weekly on Monday
+  
+  schedule:
+  - cron: "0 12 * * 1" # 8 am EST - weekly on Monday
+  
   workflow_dispatch:
     inputs:
       execution_date:
