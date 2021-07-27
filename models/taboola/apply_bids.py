@@ -1,4 +1,6 @@
 #%%
+1/0
+#%%
 from models.taboola.common import *
 
 from pytaboola import TaboolaClient
@@ -30,7 +32,52 @@ updatedf.loc[~updatedf['update'].isna(),'update'] = \
 updatedf.loc[~updatedf['schedule'].isna(), 'schedule'] = \
     updatedf.loc[~updatedf['schedule'].isna(), 'schedule'].apply(json.loads)
 #%%
-updatedf
+sql = f"""
+    SELECT 
+        *
+    FROM (
+        SELECT 
+            *,
+            ROW_NUMBER() OVER (
+                PARTITION BY body.id
+                ORDER BY datetime DESC
+            ) as rn
+        FROM 
+        {DS_SCHEMA}.{TABOOLA_CAMPAIGN_TABLE}
+    )
+    WHERE
+        rn = 1 AND 
+        body.is_active = TRUE AND 
+        date >= {TODAY}
+"""
+with HealthcareDW() as db:
+    df = db.to_df(sql)
+df
+
+pd.DataFrame(df["body"].apply(json.loads).tolist())
+
+#%%
+sql = f"""
+    SELECT DISTINCT ON (body.id)
+        *
+    FROM {DS_SCHEMA}.{TABOOLA_CAMPAIGN_TABLE}
+    WHERE
+        body.is_active = TRUE
+    ORDER BY body.id,datetime DESC
+"""
+with HealthcareDW() as db:
+    df = db.to_df(sql)
+df
+"""
+DatabaseError: Execution failed on sql '
+    SELECT DISTINCT ON (body.id)
+        *
+    FROM data_science.taboola_campaign_test
+    WHERE
+        body.is_active = TRUE
+    ORDER BY body.id,datetime DESC
+': SELECT DISTINCT ON is not supported
+"""
 #%%
 sql = f"""
     SELECT

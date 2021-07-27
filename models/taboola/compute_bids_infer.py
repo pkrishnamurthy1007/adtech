@@ -41,6 +41,8 @@ acct_service = AccountService(client)
 accnts = acct_service.list()["results"]
 id2accnt = {a["account_id"]: a for a in accnts}
 
+# TODO: pull from redshift
+
 camps = []
 for aid in [TEST_ACCNT_ID,O65_ACCNT_ID]:
     camp_service = CampaignService(client, aid)

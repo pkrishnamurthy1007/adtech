@@ -52,6 +52,7 @@ from ds_utils.db.connectors import HealthcareDW
 DS_SCHEMA = "data_science"
 TABOOLA_CAMPAIGN_MANAGEMENT_TABLE = "taboola_campaign_management_test"
 TABOOLA_CAMPAIGN_UPDATE_TABLE = "taboola_campaign_updates_test"
+TABOOLA_CAMPAIGN_TABLE = "taboola_campaign_test"
 
 def upload_taboola_updates_to_redshift(updatedf):
     table_creation_sql = f"""
@@ -69,7 +70,9 @@ def upload_taboola_updates_to_redshift(updatedf):
     with HealthcareDW() as db:
         db.exec(table_creation_sql)
         db.load_df(updatedf, schema=DS_SCHEMA,table=TABOOLA_CAMPAIGN_UPDATE_TABLE)
+
 #%%
+# TODO: pull from redshift
 active_camp_df = pd.read_csv(rscfn(__name__,"active_campaigns.csv"))
 active_camps = active_camp_df["id"]
 # activeI = campdf["attrs"]["is_active"]
