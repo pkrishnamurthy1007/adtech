@@ -17,21 +17,10 @@ for aid in [TEST_ACCNT_ID, O65_ACCNT_ID]:
     camp_service = CampaignService(client, aid)
     camps += camp_service.list()
 
-campdf = pd.DataFrame([camps],index=["body"]).T
-campdf["body"] = campdf["body"].apply(json.dumps)
-campdf["date"] = TODAY
-campdf["datetime"] = NOW
+campaign_data_df = pd.DataFrame([camps],index=["body"]).T
+campaign_data_df["body"] = campaign_data_df["body"].apply(json.dumps)
+campaign_data_df["date"] = TODAY
+campaign_data_df["datetime"] = NOW
 
-table_creation_sql = f"""
-    CREATE TABLE IF NOT EXISTS
-    {DS_SCHEMA}.{TABOOLA_CAMPAIGN_TABLE}
-    (
-        "date"                  DATE,
-        "datetime"              DATETIME,
-        "body"                  SUPER
-    );
-""" 
-with HealthcareDW() as db:
-    db.exec(table_creation_sql)
-    db.load_df(campdf, schema=DS_SCHEMA, table=TABOOLA_CAMPAIGN_TABLE)
+upload_taboola_campaign_data_to_redshift(campaign_data_df)
 # %%
