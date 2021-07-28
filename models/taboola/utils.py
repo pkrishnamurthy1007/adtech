@@ -22,78 +22,33 @@ resp.raise_for_status()
 TABOOLA_PUBLISHERS = jmespath.search('results[].account_id', resp.json())
 #%%
 from models.utils.rpc_est import TreeRPSClust
-# class TaboolaRPSEst(TreeRPSClust):
-#     def predict(self,X):
-#         X["orig_order"] = range(len(X))
-#         X["clust"] = self.transform(X)
-
-#         kpis_agg = ["revenue", "sessions", "leads"]
-#         clust_dt_rps_df = X.groupby(["clust", "utc_dt"])[kpis_agg].sum()
-
-#         # 30 is a good breakpt for using bag mtd
-#         min_date = X.index.unique("utc_dt").min()
-#         max_date = X.index.unique("utc_dt").max()
-#         clust_dt_rps_df = clust_dt_rps_df.groupby("clust") \
-#             .apply(lambda df:
-#                 df
-#                 .reset_index("clust", drop=True)
-#                 .reindex(pd.date_range(min_date, max_date)).fillna(0))
-#         clust_dt_rps_df.index.names = ["clust", "utc_dt"]
-
-
-#         def get_nday_sum(c, n):
-#             def f(df):
-#                 return df.groupby("clust") \
-#                     .apply(lambda df:
-#                         df
-#                         .reset_index("clust", drop=True)
-#                         [[c]].rolling(n).sum())[c]
-#             return f
-
-#         # TODO: make time windows configurable in hyperparamas 
-#         rpl = get_nday_sum("revenue", 7)(clust_dt_rps_df).groupby("utc_dt").transform(sum) / \
-#             get_nday_sum("leads", 7)(clust_dt_rps_df).groupby("utc_dt").transform(sum)
-#         lps = get_nday_sum("leads", 60)(clust_dt_rps_df) / \
-#             get_nday_sum("sessions", 60)(clust_dt_rps_df)
-#         clust_dt_rps_df["rps_est"] = rpl * lps
-
-#         if self.plot:
-#             for ci in lps.index.unique("clust"):
-#                 lps.loc[ci].plot()
-#             plt.title("LPS per cluster")
-#             plt.show()
-
-#             plt.title("Overall RPL by date")
-#             rpl[ci].plot()
-#             plt.show()
-
-#             for ci in clust_dt_rps_df.index.unique("clust"):
-#                 clust_dt_rps_df.loc[ci, "rps_est"].plot(label=ci)
-#             plt.legend()
-#             plt.title("RPS = LPS*RPL by cluster")
-#             plt.show()
-
-#         X["rps_est"] = X \
-#             .reset_index() \
-#             .set_index(["clust","utc_dt"])[[]] \
-#             .join(clust_dt_rps_df["rps_est"]).values
-
-#         return X.sort_values(by="orig_order")["rps_est"].values
 
 class TaboolaRPSEst(TreeRPSClust):
+    def __init__(self,
+                 clusts=None,
+                 cma=7,
+                 enc_min_cnt=100,
+                 plot=True,
+                 leads_threshold=15,
+                 leads_lookback=7,
+                 sessions_threshold=100,
+                 sessions_lookback=30):
+        self.leads_thresh = leads_threshold
+        self.leads_lookback = leads_lookback
+        self.sess_thresh = sessions_threshold
+        self.sess_lookback = sessions_lookback
+        super(TaboolaRPSEst, self).__init__(clusts, cma, enc_min_cnt, plot)
+
+
     def predict(self,X):
         X = X.copy()
         X["orig_order"] = range(len(X))
         X["clust"] = self.transform(X)
 
-        LEADS_THRESH = 15
-        LEADS_LOOKBACK = 7
-        SESS_THRESH = 100
-        SESS_LOOKBACK = 30
-        X["r / rpl"] = self.rollup(X,y=X["leads"],w=X["leads"],sample_thresh=LEADS_THRESH)
-        X["rpl * l"] = self.rollup(X,y=X["revenue"],w=X["leads"],sample_thresh=LEADS_THRESH)  
-        X["l / lps"] = self.rollup(X,y=X["sessions"],w=X["sessions"],sample_thresh=SESS_THRESH)
-        X["lps * s"] = self.rollup(X,y=X["leads"],w=X["sessions"],sample_thresh=SESS_THRESH)
+        X["r / rpl"] = self.rollup(X,y=X["leads"],w=X["leads"],sample_thresh=self.leads_thresh)
+        X["rpl * l"] = self.rollup(X,y=X["revenue"],w=X["leads"],sample_thresh=self.leads_thresh)
+        X["l / lps"] = self.rollup(X,y=X["sessions"],w=X["sessions"],sample_thresh=self.sess_thresh)
+        X["lps * s"] = self.rollup(X,y=X["leads"],w=X["sessions"],sample_thresh=self.sess_thresh)
         kpis_agg = ["r / rpl","rpl * l","l / lps","lps * s"]
         # kpis_agg = ["revenue", "sessions", "leads"]
         clust_dt_rps_df = X.groupby(["clust", "utc_dt"])[kpis_agg].first()
@@ -118,10 +73,10 @@ class TaboolaRPSEst(TreeRPSClust):
             return f
 
         # TODO: make time windows configurable in hyperparamas
-        rpl = get_nday_sum("rpl * l", LEADS_LOOKBACK)(clust_dt_rps_df) / \
-            (get_nday_sum("r / rpl", LEADS_LOOKBACK)(clust_dt_rps_df) + 1e-10)
-        lps = get_nday_sum("lps * s", SESS_LOOKBACK)(clust_dt_rps_df) / \
-            (get_nday_sum("l / lps", SESS_LOOKBACK)(clust_dt_rps_df) + 1e-10)
+        rpl = get_nday_sum("rpl * l", self.leads_lookback)(clust_dt_rps_df) / \
+            (get_nday_sum("r / rpl", self.leads_lookback)(clust_dt_rps_df) + 1e-10)
+        lps = get_nday_sum("lps * s", self.sess_lookback)(clust_dt_rps_df) / \
+            (get_nday_sum("l / lps", self.sess_lookback)(clust_dt_rps_df) + 1e-10)
         clust_dt_rps_df["rps_est"] = rpl * lps
 
         if self.plot:
