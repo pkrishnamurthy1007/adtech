@@ -34,6 +34,9 @@ TABOOLA_PIVOT_CREDS = json.loads(os.getenv("TABOOLA_PIVOT_CREDS"))
 NETWORK_ACCNT_ID = "healthcareinc-network"
 TEST_ACCNT_ID = "healthcareinc-sc2"
 O65_ACCNT_ID = "taboolaaccount-rangaritahealthcarecom"
+
+TABOOLA_MAX_PUBLISHER_MODS_PER_CAMPAIGN = 1500
+TABOOLA_MAX_PUBLISHER_EXCL_PER_CAMPAIGN = 1500
 #%%
 import datetime
 NOW = datetime.datetime.utcnow()
@@ -71,6 +74,56 @@ def upload_taboola_updates_to_redshift(updatedf):
         db.exec(table_creation_sql)
         db.load_df(updatedf, schema=DS_SCHEMA,table=TABOOLA_CAMPAIGN_UPDATE_TABLE)
 
+def upload_taboola_campaign_data_to_redshift(campaign_data_df):
+    table_creation_sql = f"""
+        CREATE TABLE IF NOT EXISTS
+        {DS_SCHEMA}.{TABOOLA_CAMPAIGN_TABLE}
+        (
+            "date"                  DATE,
+            "datetime"              DATETIME,
+            "body"                  SUPER
+        );
+    """
+    with HealthcareDW() as db:
+        db.exec(table_creation_sql)
+        db.load_df(campaign_data_df, schema=DS_SCHEMA, table=TABOOLA_CAMPAIGN_TABLE)
+
+MOST_RECENT_CAMPAIGN_UPDATES_SQL = f"""
+    SELECT 
+        *
+    FROM (
+        SELECT 
+            *,
+            ROW_NUMBER() OVER (
+                PARTITION BY account_id,campaign_id
+                ORDER BY datetime DESC
+            ) as rn
+        FROM 
+            {DS_SCHEMA}.{TABOOLA_CAMPAIGN_UPDATE_TABLE}
+    )
+    WHERE 
+        rn = 1
+    ;
+"""
+
+MOST_RECENT_CAMPAIGN_DATA_SQL = f"""
+    SELECT 
+        *
+    FROM (
+        SELECT 
+            *,
+            ROW_NUMBER() OVER (
+                PARTITION BY body.id
+                ORDER BY datetime DESC
+            ) as rn
+        FROM 
+        {DS_SCHEMA}.{TABOOLA_CAMPAIGN_TABLE}
+    )
+    WHERE
+        rn = 1 AND 
+        body.is_active = TRUE AND 
+        date >= {TODAY}
+"""
 #%%
 # TODO: pull from redshift
 active_camp_df = pd.read_csv(rscfn(__name__,"active_campaigns.csv"))

@@ -3,6 +3,24 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 from models.taboola.common import *
+#%%
+from pytaboola import TaboolaClient
+from pytaboola.services import AccountService, CampaignService, CampaignSummaryReport
+# d = CampaignSummaryReport(client, O65_ACCNT_ID).fetch(
+#     dimension="campaign_day_breakdown",start_date=TODAY-7*DAY, end_date=TODAY)
+# import jmespath
+# jmespath.search("results[?cpc > `0`].{cpc: cpc,campaign_id: campaign, utc_dt: date}",d)
+
+client = TaboolaClient(**TABOOLA_HC_CREDS)
+
+import jmespath
+import requests
+resp = requests.get(
+    f"{TABOOLA_BASE}/{O65_ACCNT_ID}/allowed-publishers/",
+    headers=client.authorization_header)
+resp.raise_for_status()
+TABOOLA_PUBLISHERS = jmespath.search('results[].account_id', resp.json())
+#%%
 from models.utils.rpc_est import TreeRPSClust
 # class TaboolaRPSEst(TreeRPSClust):
 #     def predict(self,X):
@@ -212,3 +230,4 @@ def flatten_camp(camp):
     campd.update(dict(yield_bid_strategy_rules(camp)))
     campd.update(dict(yield_bid_modifiers(camp)))
     return campd
+#%%

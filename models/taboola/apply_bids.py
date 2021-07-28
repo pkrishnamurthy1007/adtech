@@ -7,57 +7,24 @@ from pytaboola import TaboolaClient
 from pytaboola.services import CampaignService
 from ds_utils.db.connectors import HealthcareDW
 
-sql = f"""
-    SELECT 
-        *
-    FROM (
-        SELECT 
-            *,
-            ROW_NUMBER() OVER (
-                PARTITION BY account_id,campaign_id
-                ORDER BY datetime DESC
-            ) as rn
-        FROM 
-            {DS_SCHEMA}.{TABOOLA_CAMPAIGN_UPDATE_TABLE}
-    )
-    WHERE 
-        rn = 1
-    ;
-"""
+
 with HealthcareDW() as db:
-    updatedf = db.to_df(sql)
+    updatedf = db.to_df(MOST_RECENT_CAMPAIGN_UPDATES_SQL)
 
 updatedf.loc[~updatedf['update'].isna(),'update'] = \
     updatedf.loc[~updatedf['update'].isna(),'update'].apply(json.loads)
 updatedf.loc[~updatedf['schedule'].isna(), 'schedule'] = \
     updatedf.loc[~updatedf['schedule'].isna(), 'schedule'].apply(json.loads)
 #%%
-sql = f"""
-    SELECT 
-        *
-    FROM (
-        SELECT 
-            *,
-            ROW_NUMBER() OVER (
-                PARTITION BY body.id
-                ORDER BY datetime DESC
-            ) as rn
-        FROM 
-        {DS_SCHEMA}.{TABOOLA_CAMPAIGN_TABLE}
-    )
-    WHERE
-        rn = 1 AND 
-        body.is_active = TRUE AND 
-        date >= {TODAY}
-"""
+
 with HealthcareDW() as db:
-    df = db.to_df(sql)
+    df = db.to_df(MOST_RECENT_CAMPAIGN_DATA_SQL)
 df
 
 pd.DataFrame(df["body"].apply(json.loads).tolist())
 
 #%%
-sql = f"""
+MOST_RECENT_CAMPAIGN_UPDATES_SQL = f"""
     SELECT DISTINCT ON (body.id)
         *
     FROM {DS_SCHEMA}.{TABOOLA_CAMPAIGN_TABLE}
@@ -66,7 +33,7 @@ sql = f"""
     ORDER BY body.id,datetime DESC
 """
 with HealthcareDW() as db:
-    df = db.to_df(sql)
+    df = db.to_df(MOST_RECENT_CAMPAIGN_UPDATES_SQL)
 df
 """
 DatabaseError: Execution failed on sql '
@@ -79,7 +46,7 @@ DatabaseError: Execution failed on sql '
 ': SELECT DISTINCT ON is not supported
 """
 #%%
-sql = f"""
+MOST_RECENT_CAMPAIGN_UPDATES_SQL = f"""
     SELECT
         h,
         *
@@ -98,7 +65,7 @@ sql = f"""
     ;
 """
 with HealthcareDW() as db:
-    df = db.to_df(sql)
+    df = db.to_df(MOST_RECENT_CAMPAIGN_UPDATES_SQL)
 df
 #%%
 for _, r in updatedf.iterrows():

@@ -80,7 +80,7 @@ jobs:
           SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
           SLACK_USERNAME: GithubActions
 
-      - name: Success notification
+      - name: Failure notification
         uses: rtCamp/action-slack-notify@v2
         if: cancelled() || failure()
         env:

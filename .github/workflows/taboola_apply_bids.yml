@@ -59,17 +59,17 @@ jobs:
           export PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}
           python ${GITHUB_WORKSPACE}/models/taboola/apply_bids.py
 
-      - name: Success notification
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
-          SLACK_MESSAGE: \
-            <${{ env.AMAL_SID }}> Taboola bid application SUCCESS!
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
-          SLACK_USERNAME: GithubActions
+      # - name: Success notification
+      #   uses: rtCamp/action-slack-notify@v2
+      #   env:
+      #     SLACK_CHANNEL: ${{ env.SLACK_CHANNEL }}
+      #     SLACK_MESSAGE: \
+      #       <${{ env.AMAL_SID }}> Taboola bid application SUCCESS!
+      #     SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+      #     SLACK_ICON: https://cdn.healthcare.com/devops/logos/GitHub-Mark-64px.png
+      #     SLACK_USERNAME: GithubActions
 
-      - name: Success notification
+      - name: Failure notification
         uses: rtCamp/action-slack-notify@v2
         if: cancelled() || failure()
         env:
