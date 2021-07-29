@@ -60,7 +60,7 @@ class TaboolaRPSEst(TreeRPSClust):
             .apply(lambda df:
                 df
                 .reset_index("clust", drop=True)
-                .reindex(pd.date_range(min_date, max_date)).fillna(0))
+                .reindex(pd.date_range(min_date, max_date)).fillna(method="ffill"))
         clust_dt_rps_df.index.names = ["clust", "utc_dt"]
 
         def get_nday_sum(c, n):

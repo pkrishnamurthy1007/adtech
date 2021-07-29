@@ -122,6 +122,29 @@ uniplot.plot([*date_kpi_df[roasC[1:]].fillna(1).values.T],
              title=f"rolling ROAS",
              width=90,height=15)
 #%%
+# DAY = datetime.timedelta(1)
+# from matplotlib import pyplot as plt
+# kwd = "+molina +insurance"
+# # kwd = "+obamacare +cost"
+# I = reporting_df["keyword"] == kwd
+# reporting_df[I][["rev","cost","clicks"]].sum()
+# df = reporting_df[I].set_index("date").sort_index()[["rev","cost","clicks","max_cpc"]].rolling(7).sum()
+# df["ROAS"] = df["rev"] / df["cost"]
+# df.plot()
+# plt.xlim([TODAY - 90*DAY,TODAY])
+# plt.show()
+# (df/df.mean()).plot()
+# plt.xlim([TODAY - 90*DAY,TODAY])
+# plt.show()
+# #%%
+# df['clicks'].plot()
+# #%%
+# df["cost"]
+# #%%
+# df["ROAS"].plot()
+# #%%
+# reporting_df[I]
+#%%
 ### CREATE SEPARATE GROUPINGS FOR GEO-GRANULAR ADGROUPS AND KEYWORDS ###
 """
 CHANGED:
