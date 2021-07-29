@@ -11,17 +11,17 @@ rps_df = agg_rps(start_date, end_date, None, traffic_source=TABOOLA,
 rps_df = translate_taboola_vals(rps_df)
 rps_df = rps_df_postprocess(rps_df)
 rps_df = rps_df.reset_index()
-
+#%%
 import joblib
 import models.taboola.utils
 importlib.reload(models.taboola.utils)
 TaboolaRPSEst = models.taboola.utils.TaboolaRPSEst
 rps_model: TaboolaRPSEst = joblib.load(MODEL_PTH)
+# rps_model = TaboolaRPSEst(clusts=None,enc_min_cnt=10).fit(
+#     rps_df.set_index([*split_cols, "utc_dt"]), None)
 
 rps_df["clust"] = rps_model.transform(rps_df.set_index([*split_cols,"utc_dt"]))
 rps_df["rps_est"] = rps_model.predict(rps_df.set_index([*split_cols,"utc_dt"]))
-rps_df["clust_sessions"] = rps_df.groupby(["utc_dt","clust"])["sessions"].transform(sum)
-rps_df["clust_revenue"] = rps_df.groupby(["utc_dt","clust"])["revenue"].transform(sum)
 
 rps_df_campaign = rps_df[rps_df["utc_dt"].dt.date > TODAY - 7*DAY] \
     .groupby(["campaign_id"])[["rps_est"]] \
@@ -31,6 +31,10 @@ rps_df_publisher = rps_df \
         .groupby(["campaign_id","keyword"])[["rps_est"]] \
         .agg(get_wavg_by(rps_df, "sessions")) \
         .unstack()
+
+# rps_df["clust_sessions"] = rps_df.groupby(["utc_dt","clust"])["sessions"].transform(sum)
+# rps_df["clust_leads"] = rps_df.groupby(["utc_dt","clust"])["leads"].transform(sum)
+# rps_df["clust_revenue"] = rps_df.groupby(["utc_dt","clust"])["revenue"].transform(sum)
 #%%
 with HealthcareDW() as db:
     campaign_data_df = db.to_df(MOST_RECENT_CAMPAIGN_DATA_SQL)
@@ -86,7 +90,7 @@ bid_mod_df_new = bid_mod_df_new \
 campdf.loc[active_camps,("updates","cpc")] = cpc_df_campaign_new.round(2)
 bid_mod_items = bid_mod_df_new \
     .round(2) \
-    .apply(lambda r: r[~r.isna()] .sort_values(ascending=False).items(),axis=1) \
+    .apply(lambda r: r[~r.isna() & ~(r==0)] .sort_values(ascending=False).items(),axis=1) \
     .apply(list)
 campdf.loc[active_camps,("updates","publisher_bid_modifier")] = \
     bid_mod_items.apply(
@@ -111,3 +115,4 @@ updatedf["date"] = TODAY
 updatedf["datetime"] = NOW
 #%%
 upload_taboola_updates_to_redshift(updatedf)
+# %%
