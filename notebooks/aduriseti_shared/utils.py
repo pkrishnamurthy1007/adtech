@@ -1,4 +1,5 @@
 #%%
+import functools
 from pkg_resources import resource_filename as rscfn
 import os
 from ds_utils.db.connectors import HealthcareDW,PivotDW
