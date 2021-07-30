@@ -105,6 +105,17 @@ for n in [3,7,14,30]:
 roasC = [c for c in date_kpi_df.columns if c.startswith("ROAS")]
 date_kpi_df[roasC[1:]].plot()
 
+# # requires `gnuplot` which may not be available on gh action server
+# import termplotlib
+# termplotlib.plot.plot(bucket_rps_df["rps_avg_true"].fillna(0),bucket_rps_df["rps_avg_true"].index)
+
+# # doesnt work in vscode
+# import plotext
+# plotext.plot([dfagg_norm["max_cpc"], dfagg_norm["rev_7day"]], dfagg_norm.index)
+# plotext.title(f"mean normalized 7-day rolling rev and reported max_cpc")
+# plotext.plotsize(100,30)
+# plotext.show()    
+
 import uniplot
 uniplot.plot([*date_kpi_df[roasC[1:]].fillna(1).values.T],
              legend_labels=roasC[1:],
@@ -336,7 +347,7 @@ decay_factor = 0.03
 days_back = (TODAY - df_rpc.reset_index()["date"].dt.date).dt.days
 df_rpc["decay_multiplier"] = np.exp(-decay_factor * days_back.values)
 df_rpc = df_rpc.sort_index(level="date",ascending=False)
-#%%
+
 """
 TODO:
 Q: how to deal w/ bid trap prpbolem?
@@ -424,27 +435,246 @@ df_bid.loc[df_bid["max_cpc_new"] < CPC_MIN, "max_cpc_new"] = CPC_MIN
 df_bid["max_cpc_new"] = df_bid["max_cpc_new"].round(2) 
 #record change
 df_bid["bid_change"] = df_bid["max_cpc_new"] - df_bid["max_cpc_old"]
-
-#prepare output
-df_out = df_bid
-df_out = df_out.sort_values("cost_sum_7day_raw",ascending=False)
-def write_kw_bids_to_s3(df,accnt):
-    accnt_dir = f"{OUTPUT_DIR}/{accnt}"
-    os.makedirs(accnt_dir, exist_ok=True)
-    bids_fnm = f"BIDS_{TODAY}.csv"
-    bids_fpth = f"{OUTPUT_DIR}/{accnt}/{bids_fnm}"
-    df.to_csv(bids_fpth, index=False, encoding='utf-8')
-
-    #### WRITE OUTPUT TO S3 ####
-    s3_client = boto3.client('s3')
-    response = s3_client.upload_file(
-        bids_fpth,
-        S3_OUTPUT_BUCKET,
-        f"{S3_OUTPUT_PREFIX}/{accnt}/{bids_fnm}")
-    return response
-
-#write csv to local/s3
-write_kw_bids_to_s3(df_out, "ALL_ACCOUNTS")
-for accnt in df_out["account_id"].unique():
-    write_kw_bids_to_s3(df_out[df_out["account_id"] == accnt],accnt)
 #%%
+DAY = datetime.timedelta(1)
+from matplotlib import pyplot as plt
+kwd = "+molina +insurance"
+# kwd = "+obamacare +cost"
+I = reporting_df["keyword"] == kwd
+reporting_df[I][["rev","cost","clicks"]].sum()
+df = reporting_df[I].set_index("date").sort_index()[["rev","cost","clicks","max_cpc"]].rolling(7).sum()
+df["ROAS"] = df["rev"] / df["cost"]
+df.plot()
+plt.xlim([TODAY - 90*DAY,TODAY])
+plt.show()
+(df/df.mean()).plot()
+plt.xlim([TODAY - 90*DAY,TODAY])
+plt.show()
+#%%
+from models.utils import get_wavg_by
+kwdf = reporting_df \
+        .groupby("keyword_id") \
+        .agg({
+            "keyword": "last",
+            "rev": sum,
+            "cost": sum,
+            "clicks": sum,
+            "latest_max_cpc": "last",
+            "max_cpc": get_wavg_by(reporting_df,"cost"),
+        })
+kwdf = kwdf.sort_values(by="cost",ascending=False)
+
+def get_kwnd(reporting_df,n):
+    kwnd = reporting_df \
+        [reporting_df["date"].dt.date > TODAY - n*DAY] \
+        .groupby("keyword_id") \
+        [["rev","cost","clicks"]].sum() \
+        .reindex(reporting_df['keyword_id'].unique())
+    kwnd.columns = [f"{c}{n}d" for c in kwnd.columns]
+    return kwnd
+kwdf = pd.concat((
+            kwdf, get_kwnd(reporting_df, 7), get_kwnd(reporting_df, 30),
+            get_kwnd(reporting_df,60), get_kwnd(reporting_df,90)),
+        axis=1)
+
+profitableI = (kwdf["rev"] / kwdf["cost"]) > 0.95
+deadI = kwdf['clicks7d'] < (kwdf['clicks60d'] * 7 / 60 * 0.5)
+#%%
+kwdf[profitableI & deadI].sum()
+#%%
+kwdf[profitableI & deadI]
+#%%
+kwdf
+#%%
+kwdf = kwdf .join(
+    df_bid.set_index("keyword_id") \
+        [["adgroup","keyword","rpc_est","cpc_observed","cpc_target","max_cpc_old","max_cpc_new"]],
+    how='left',rsuffix="_") \
+    .sort_values(by="cost",ascending=False)
+kwdf[profitableI & deadI].head(20)
+#%%
+
+"""
+rps = rpl * lpc
+    = rpl_short * rpl_mod_long * lpc_short * lpc_mod_long
+tree rollup
+rollup through time
+"""
+#%%
+# 361640621
+# 1282030941525812
+# #%%
+# df_out[df_out["campaign_id"] == "361640621"]
+# #%%
+# I = df_out["campaign_id"] == "361640621"
+# r = df_out[I].sort_values(by="cost_raw").iloc[-1][kw_gp_idx_C]
+# kw_slc = (slice(None), slice(None), *r)
+# df_kw = df_rpc.loc[kw_slc]
+# df_kw
+# #%%
+# I = reporting_df["campaign_id"] == "361640621"
+# df = reporting_df[I].groupby("date")[["cost","rev"]].sum()
+# df["roas"] = df["rev"] / df["cost"]
+# # df["roas"].plot()
+# df[["cost","rev"]].plot()
+# #%%
+# I = reporting_df["adgroup_id"] == "1282030941525812"
+# df = reporting_df[I].groupby("date")[["cost","rev"]].sum()
+# df["roas"] = df["rev"] / df["cost"]
+# # df["roas"].plot()
+# df[["cost","rev"]].plot()
+# #%%
+# df = reporting_df.groupby(["campaign_id","date"]) \
+#     [["cost","rev"]] .sum()
+# df = df.groupby("campaign_id") \
+#     .apply(lambda df:
+#                 df.reset_index("campaign_id",drop=True) \
+#                     .reindex(pd.date_range(TODAY-90*DAY,TODAY)) \
+#                         .rolling(7).sum()
+#     )
+# df["roas"] = df["rev"] / df["cost"]
+# for cid in df.index.unique("campaign_id"):
+#     df.loc[cid]["roas"].plot()
+# #%%
+
+#%%
+from api.bingads.bingapi.client import BingClient, LocalAuthorizationData
+import datetime,pytz
+NOW = datetime.datetime.now(pytz.timezone('EST'))
+NOW_ = datetime.datetime.now(pytz.timezone('US/Eastern'))
+print(NOW,NOW_)
+#%%
+ADTECH_ENV_SECRET = "SM_ENV_BASE"
+
+import boto3
+import json
+
+secretsmanager = boto3.client('secretsmanager')
+secret = secretsmanager.get_secret_value(SecretId='data_science_mysql_analytics_login')
+
+import json
+import base64
+environ_bytes = \
+    base64.b64encode(
+        json.dumps(
+            {**os.environ}).encode('utf-8'))
+try:
+    resp = secretsmanager.create_secret(
+        Name=ADTECH_ENV_SECRET,
+        SecretBinary=environ_bytes,
+    )
+except Exception as ex:
+    print(f"Creating secret failed w/ {type(ex)}: {ex} - attempting update")
+    resp = secretsmanager.put_secret_value(
+        SecretId=ADTECH_ENV_SECRET,
+        SecretBinary=environ_bytes,
+    )
+    print("...Successs!!")
+
+import boto3
+import json
+import os
+
+secretsmanager = boto3.client('secretsmanager')
+sm_env_base_secret = secretsmanager.get_secret_value(SecretId=ADTECH_ENV_SECRET)
+sm_env_base = json.loads(base64.b64decode(sm_env_base_secret["SecretBinary"]))
+# already set os env vars take precendence over aws vals
+os.environ.update({**sm_env_base, **os.environ})
+#%%
+sm_env_base_secret
+#%%
+query = f"""
+SELECT 
+    count(*)
+FROM tron.intraday_profitability
+"""
+from ds_utils.db.connectors import HealthcareDW
+# TODO: https://healthcareinc.slack.com/archives/C01VBRTJ4R5/p1619728061020600
+with HealthcareDW() as db:
+    print(db.to_df(query))
+# %%
+env = "REDSHIFT_PH_USER"
+old_val = os.getenv(env)
+new_val = "Asdfafdasfd"
+os.environ.update({env: new_val,**os.environ})
+os.getenv(env)
+# %%
+os.environ.update({env: old_val})
+
+# %%
+import datetime
+now = datetime.datetime.now()
+now.__str__()
+# %%
+now.date().__str__()
+# %%
+from utils.env import load_env_from_aws
+load_env_from_aws()
+import json,logging
+bing_creds = json.loads(os.getenv("BING_CREDS"))
+LOGLEVEL = logging.WARN
+from api.bingads.bingapi.client import BingClient
+
+accnt_id = "3196099"
+
+accnt_client = BingClient(
+        account_id=accnt_id,
+        customer_id=bing_creds['BING_CUSTOMER_ID'],
+        dev_token=bing_creds['BING_DEVELOPER_TOKEN'],
+        client_id=bing_creds['BING_CLIENT_ID'],
+        # refresh_token=None,
+        refresh_token=bing_creds['BING_REFRESH_TOKEN'],
+        loglevel=LOGLEVEL,
+    )
+
+from api.bingads.bingapi.client import BingClient,LocalAuthorizationData
+from models.bing.keywords.common import *
+
+# Debug requests and responses
+LOGLEVEL = logging.WARN
+logging.basicConfig(level=LOGLEVEL)
+logging.getLogger('suds.client').setLevel(logging.DEBUG)
+logging.getLogger('suds.transport.http').setLevel(logging.DEBUG)
+
+camps = accnt_client.get_campaigns()
+camps
+# %%
+accnt_client.authentication._oauth_tokens.__dict__
+#%%
+accnt_client.authentication._oauth_scope
+#%%
+accnt_client.authentication._require_live_connect
+# %%
+accnt_client = BingClient(
+    account_id=accnt_id,
+    customer_id=bing_creds['BING_CUSTOMER_ID'],
+    dev_token=bing_creds['BING_DEVELOPER_TOKEN'],
+    client_id=bing_creds['BING_CLIENT_ID'],
+    # refresh_token=None,
+    # refresh_token=bing_creds['BING_REFRESH_TOKEN'],
+    refresh_token=accnt_client.authentication._oauth_tokens._refresh_token,
+    loglevel=LOGLEVEL,
+)
+
+# Debug requests and responses
+LOGLEVEL = logging.WARN
+logging.basicConfig(level=LOGLEVEL)
+logging.getLogger('suds.client').setLevel(logging.DEBUG)
+logging.getLogger('suds.transport.http').setLevel(logging.DEBUG)
+
+camps = accnt_client.get_campaigns()
+camps
+
+# %%
+accnt_client.authentication._oauth_tokens.__dict__
+#%%
+bing_creds["BING_REFRESH_TOKEN"] = accnt_client.authentication._oauth_tokens._refresh_token
+os.environ["BING_CREDS"] = json.dumps(bing_creds)
+from utils.env import dump_env_to_aws
+dump_env_to_aws()
+# %%
+bing_creds
+# %%
+import bingads
+bingads.__version__
+# %%

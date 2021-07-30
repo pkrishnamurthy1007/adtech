@@ -17,20 +17,6 @@ logging.basicConfig(level=LOGLEVEL)
 # logging.getLogger('suds.transport.http').setLevel(logging.DEBUG)
 
 bing_creds = json.loads(os.getenv("BING_CREDS"))
-# bing_creds["BING_REFRESH_TOKEN"] = "M.R3_BAY.-CeefO6bNKWF4el5x*Edtx4dBCeilSbm0YDBj0UO5Q28x9oVk1!SBMUyqbf1snTjVyWi6tilC0ALPANuHLtKkZEkR5etP9ax9WFxGGjVHOIDsUUo8EwRdk5QXwHrfMa4XMdk40ib4ZyYF3Fm4S8PpE3IkKzPUfNQCibqnpDVGFxjArMFJaQVJ7xhXTu0fZUjinEy3ZSuWx4y87Jw9UUWVnHMV*VFadK60SeTsg!lziXve5dB96xTb74ieV!YlKxU63GnxlDC3*UoK7Te1k1gh5heZZE7j*WIm*ODSrvRHP1NYdmpKW3vq7T5VDVhem5dKklEMLmcoH1XjDdkpHMernABvQS16B7Gkmv5ci3tAJkLh"
-
-# from ds_utils.db.connectors import HealthcareDW,AnalyticsDB
-# with AnalyticsDB() as db:
-#     bing_accnt_df = db.to_df("select * from dev_ent_d1_gold.adtech.bingads.account_id")
-# bing_accnt_df
-bing_accnt_df = pd.DataFrame(
-    [
-        ["B013P57C", "43030867"],
-        ["X000EWRC", "3196099"],
-        ["B013D68T", "43060164"],
-    ],
-    columns=["account_number", "account_id"],
-)
 
 import boto3
 ls_resp = boto3.client("s3").list_objects(Bucket=S3_OUTPUT_BUCKET,Prefix=S3_OUTPUT_PREFIX)
@@ -45,7 +31,6 @@ assert df_out.__len__() * 2 == old_len, """
 We should have 2 records for each kw b/c we break bids out by account_id and write them,
 but we also write the bids for all accounts.
 """
-TODAY
 #%%
 from api.bingads.bingapi.client import *
 

@@ -20,7 +20,6 @@ rps_model: TaboolaRPSEst = joblib.load(MODEL_PTH)
 # rps_model = TaboolaRPSEst(clusts=None,enc_min_cnt=10).fit(
 #     rps_df.set_index([*split_cols, "utc_dt"]), None)
 
-rps_df["clust"] = rps_model.transform(rps_df.set_index([*split_cols,"utc_dt"]))
 rps_df["rps_est"] = rps_model.predict(rps_df.set_index([*split_cols,"utc_dt"]))
 
 rps_df_campaign = rps_df[rps_df["utc_dt"].dt.date > TODAY - 7*DAY] \
@@ -32,6 +31,7 @@ rps_df_publisher = rps_df \
         .agg(get_wavg_by(rps_df, "sessions")) \
         .unstack()
 
+# rps_df["clust"] = rps_model.transform(rps_df.set_index([*split_cols,"utc_dt"]))
 # rps_df["clust_sessions"] = rps_df.groupby(["utc_dt","clust"])["sessions"].transform(sum)
 # rps_df["clust_leads"] = rps_df.groupby(["utc_dt","clust"])["leads"].transform(sum)
 # rps_df["clust_revenue"] = rps_df.groupby(["utc_dt","clust"])["revenue"].transform(sum)
