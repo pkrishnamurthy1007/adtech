@@ -48,7 +48,6 @@ rps_df.loc[fitI, "clust"] = clusterer.transform(
 rps_df.loc[~fitI, "clust"] = clusterer.transform(
     rps_df[~fitI].set_index([*split_cols, "utc_dt"]))
 rps_df["clust"] = rps_df["clust"].fillna(-1)
-
 #%%
 self = clusterer
 X = rps_df.set_index([*split_cols, "utc_dt"])

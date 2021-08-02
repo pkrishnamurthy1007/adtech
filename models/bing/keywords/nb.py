@@ -1,4 +1,197 @@
 #%%
+import models.taboola.utils
+import joblib
+from models.common import *
+from models.utils import wavg, get_wavg_by, wstd
+from models.data.queries.session import *
+
+from models.bing.keywords.common import *
+
+start_date = TODAY - 90*DAY
+end_date = TODAY
+
+split_cols = ["product","campaign_id","adgroup_id","keyword"]
+rps_df = agg_rps(start_date, end_date, None, traffic_source=BING,
+                 agg_columns=tuple([*split_cols, "utc_dt"]))
+rps_df = rps_df.reset_index()
+rps_df
+#%%
+import models.taboola.utils
+import importlib
+importlib.reload(models.taboola.utils)
+TaboolaRPSEst = models.taboola.utils.TaboolaRPSEst
+# rps_model: TaboolaRPSEst = joblib.load(MODEL_PTH)
+rps_model = TaboolaRPSEst(clusts=None,enc_min_cnt=10).fit(
+    rps_df.set_index([*split_cols, "utc_dt"]), None)
+rps_df["clust"] = rps_model.transform(rps_df.set_index([*split_cols, "utc_dt"]))
+#%%
+import pandas as pd
+camp = "361640619"
+adgp = "1283130453341861"
+kwd = "medicare part b"
+I = (rps_df["campaign_id"] == camp) & (rps_df["adgroup_id"] == adgp) & (rps_df["keyword"] == kwd)
+df = rps_df[I].set_index("utc_dt")
+(df['revenue'] / df['sessions']).rolling(7).mean().plot()
+#%%
+df['sessions'].rolling(7).mean().plot()
+#%%
+df['revenue'].rolling(7).mean().plot()
+#%%
+"""
+we want rps estimation to do 2 contradictory things:
+1. respond to short term changes in (rps,lps,rpl,etc....) 
+2. use long range historical data to "revive" keywords
+
+I think the process we use for rps estimation needs to be separate from the process
+we use to "revive" low volume keywords
+"""
+self = rps_model
+X = rps_df.set_index([*split_cols, "utc_dt"]).copy()
+y = X["revenue"]
+w = X["sessions"]
+sample_thresh=100
+
+X["clust"] = self.transform(X)
+#%%
+Xdf = X
+X = X .reset_index()[X.index.names].iloc[:, :-1]
+X = self.enc_1hot.transform(X)
+print("|X|", X.shape)
+P = self.clf.decision_path(X)
+P
+#%%
+
+#%%
+Pdf = pd.DataFrame(P.todense(),index=Xdf.index)
+y_Pdf = Pdf * y.values.reshape(-1,1)
+w_Pdf = Pdf * w.values.reshape(-1,1)
+y_agg_Pdf = Pdf * y_Pdf.groupby("utc_dt").transform(sum)
+w_agg_Pdf = Pdf * w_Pdf.groupby("utc_dt").transform(sum)
+
+# SAMPLE_THRESH = 100
+# I = (~(session_agg_Pdf < SAMPLE_THRESH)).iloc[:,::-1].idxmax(axis=1)
+# I = np.eye(self.clf.tree_.node_count).astype(bool)[I]
+
+# rev_rollup = (revenue_agg_Pdf * I).sum(axis=1)
+# sess_rollup = (session_agg_Pdf * I).sum(axis=1)
+# rps_rollup = rev_rollup / sess_rollup
+# rps_rollup
+
+def running_suffix_max(df):
+    df_running_max = df.copy()
+    H, W = df_running_max.shape
+    for ci in reversed(range(W-1)):
+        df_running_max.iloc[:, ci] = np.maximum(
+            df_running_max.iloc[:, ci], df_running_max.iloc[:, ci+1])
+    return df_running_max
+
+y_contrib_Pdf = y_agg_Pdf - running_suffix_max(y_agg_Pdf).shift(-1,axis=1).fillna(0)
+w_contrib_Pdf = w_agg_Pdf - running_suffix_max(w_agg_Pdf).shift(-1,axis=1).fillna(0)
+y_contrib_Pdf = np.maximum(0,y_contrib_Pdf)
+w_contrib_Pdf = np.maximum(0,w_contrib_Pdf)
+
+"""
+total_sess = 0
+total_rev = 0
+while total_sess < THRESH - scan up through decision tree path:
+    rollup_factor = min(n.sessions,THRESH - total_sess) / n.sessions
+    total_sess += n.sessions * rollup_factor
+    total_rev += n.rev * rollup_factor
+ROAS = total_rev / total_sess
+"""
+H,W = w_contrib_Pdf.shape
+total_w = w_contrib_Pdf.iloc[:,-1]
+total_y  = y_contrib_Pdf.iloc[:,-1]
+import tqdm
+for ni in tqdm.tqdm(reversed(w_contrib_Pdf.columns[:-1])):
+    wni = w_contrib_Pdf.iloc[:, ni]
+    yni = y_contrib_Pdf.iloc[:,ni]
+    rollup_factor = np.clip((sample_thresh - total_w) / wni, 0, 1).fillna(0)
+    total_w += wni * rollup_factor
+    total_y += yni * rollup_factor 
+#%%
+rps_df["rps_est"] = rps_model.predict(
+    rps_df.set_index([*split_cols, "utc_dt"]))
+
+rps_df_campaign = rps_df[rps_df["utc_dt"].dt.date > TODAY - 7*DAY] \
+    .groupby(["campaign_id"])[["rps_est"]] \
+    .agg(get_wavg_by(rps_df, "sessions"))
+rps_df_keyword = rps_df[rps_df["utc_dt"].dt.date > TODAY - 7*DAY] \
+    .groupby(["campaign_id", "keyword"])[["rps_est"]] \
+    .agg(get_wavg_by(rps_df, "sessions")) \
+    .unstack()
+
+# rps_df["clust"] = rps_model.transform(rps_df.set_index([*split_cols,"utc_dt"]))
+# rps_df["clust_sessions"] = rps_df.groupby(["utc_dt","clust"])["sessions"].transform(sum)
+# rps_df["clust_leads"] = rps_df.groupby(["utc_dt","clust"])["leads"].transform(sum)
+# rps_df["clust_revenue"] = rps_df.groupby(["utc_dt","clust"])["revenue"].transform(sum)
+#%%
+rps_df["rps_est"]
+#%%
+df = rps_df.groupby(["product","campaign_id","adgroup_id","keyword"]).agg({
+    "revenue": sum,
+    "sessions": sum,
+    "rps_est": get_wavg_by(rps_df,"sessions"),
+}) .sort_values(by="revenue",ascending=False)
+df
+#%%
+DAY = datetime.timedelta(1)
+from matplotlib import pyplot as plt
+kwd = "+molina +insurance"
+# kwd = "+obamacare +cost"
+I = reporting_df["keyword"] == kwd
+reporting_df[I][["rev","cost","clicks"]].sum()
+df = reporting_df[I].set_index("date").sort_index()[["rev","cost","clicks","max_cpc"]].rolling(7).sum()
+df["ROAS"] = df["rev"] / df["cost"]
+df.plot()
+plt.xlim([TODAY - 90*DAY,TODAY])
+plt.show()
+(df/df.mean()).plot()
+plt.xlim([TODAY - 90*DAY,TODAY])
+plt.show()
+#%%
+from models.utils import get_wavg_by
+kwdf = reporting_df \
+        .groupby("keyword_id") \
+        .agg({
+            "keyword": "last",
+            "rev": sum,
+            "cost": sum,
+            "clicks": sum,
+            "latest_max_cpc": "last",
+            "max_cpc": get_wavg_by(reporting_df,"cost"),
+        })
+kwdf = kwdf.sort_values(by="cost",ascending=False)
+
+def get_kwnd(reporting_df,n):
+    kwnd = reporting_df \
+        [reporting_df["date"].dt.date > TODAY - n*DAY] \
+        .groupby("keyword_id") \
+        [["rev","cost","clicks"]].sum() \
+        .reindex(reporting_df['keyword_id'].unique())
+    kwnd.columns = [f"{c}{n}d" for c in kwnd.columns]
+    return kwnd
+kwdf = pd.concat((
+            kwdf, get_kwnd(reporting_df, 7), get_kwnd(reporting_df, 30),
+            get_kwnd(reporting_df,60), get_kwnd(reporting_df,90)),
+        axis=1)
+
+profitableI = (kwdf["rev"] / kwdf["cost"]) > 0.95
+deadI = kwdf['clicks7d'] < (kwdf['clicks60d'] * 7 / 60 * 0.5)
+#%%
+kwdf[profitableI & deadI].sum()
+#%%
+kwdf[profitableI & deadI]
+#%%
+kwdf
+#%%
+kwdf = kwdf .join(
+    df_bid.set_index("keyword_id") \
+        [["adgroup","keyword","rpc_est","cpc_observed","cpc_target","max_cpc_old","max_cpc_new"]],
+    how='left',rsuffix="_") \
+    .sort_values(by="cost",ascending=False)
+kwdf[profitableI & deadI].head(20)
+#%%
 """
 DAILY KEYWORD BIDDING ALGORITHM BING
 """
