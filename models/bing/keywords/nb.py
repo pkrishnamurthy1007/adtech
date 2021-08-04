@@ -97,7 +97,6 @@ y_rollup = y_dt_rollup_Pdf.stack()[tree_rollup_I.items()]
 rpc = y_rollup / w_rollup
 #%%
 rps_df = rps_df.join(rpc.reset_index(level=1,drop=True).to_frame("rps_est"),on="clust")
-#%%
 # rps_df["rps_est"] = rps_model.predict(
 #     rps_df.set_index([*split_cols, "utc_dt"]))
 
@@ -122,73 +121,6 @@ rps_est_df = rps_df.groupby(["product","campaign_id","adgroup_id","keyword"]).ag
 rps_est_df
 #%%
 rps_est_df.loc[U65]
-#%%
-rps_est_df = rps_est_df.reset_index().set_index("keyword").join(
-    reporting_df.drop_duplicates("keyword",keep="last").set_index("keyword")[["latest_max_cpc","max_cpc"]]) \
-        .sort_values(by="revenue",ascending=False)
-#%%
-rps_est_df[rps_est_df["product"] == U65]
-#%%
-rps_est_df.loc["+obamacare +cost"]
-#%%
-reporting_df.drop_duplicates("keyword",keep="last").set_index("keyword")[["latest_max_cpc","max_cpc"]]
-#%%
-DAY = datetime.timedelta(1)
-from matplotlib import pyplot as plt
-kwd = "+molina +insurance"
-# kwd = "+obamacare +cost"
-dt_rollup_I = reporting_df["keyword"] == kwd
-reporting_df[dt_rollup_I][["rev","cost","clicks"]].sum()
-df = reporting_df[dt_rollup_I].set_index("date").sort_index()[["rev","cost","clicks","max_cpc"]].rolling(7).sum()
-df["ROAS"] = df["rev"] / df["cost"]
-df.plot()
-plt.xlim([TODAY - 90*DAY,TODAY])
-plt.show()
-(df/df.mean()).plot()
-plt.xlim([TODAY - 90*DAY,TODAY])
-plt.show()
-#%%
-from models.utils import get_wavg_by
-kwdf = reporting_df \
-        .groupby("keyword_id") \
-        .agg({
-            "keyword": "last",
-            "rev": sum,
-            "cost": sum,
-            "clicks": sum,
-            "latest_max_cpc": "last",
-            "max_cpc": get_wavg_by(reporting_df,"cost"),
-        })
-kwdf = kwdf.sort_values(by="cost",ascending=False)
-
-def get_kwnd(reporting_df,n):
-    kwnd = reporting_df \
-        [reporting_df["date"].dt.date > TODAY - n*DAY] \
-        .groupby("keyword_id") \
-        [["rev","cost","clicks"]].sum() \
-        .reindex(reporting_df['keyword_id'].unique())
-    kwnd.columns = [f"{c}{n}d" for c in kwnd.columns]
-    return kwnd
-kwdf = pd.concat((
-            kwdf, get_kwnd(reporting_df, 7), get_kwnd(reporting_df, 30),
-            get_kwnd(reporting_df,60), get_kwnd(reporting_df,90)),
-        axis=1)
-
-profitableI = (kwdf["rev"] / kwdf["cost"]) > 0.95
-deadI = kwdf['clicks7d'] < (kwdf['clicks60d'] * 7 / 60 * 0.5)
-#%%
-kwdf[profitableI & deadI].sum()
-#%%
-kwdf[profitableI & deadI]
-#%%
-kwdf
-#%%
-kwdf = kwdf .join(
-    df_bid.set_index("keyword_id") \
-        [["adgroup","keyword","rpc_est","cpc_observed","cpc_target","max_cpc_old","max_cpc_new"]],
-    how='left',rsuffix="_") \
-    .sort_values(by="cost",ascending=False)
-kwdf[profitableI & deadI].head(20)
 #%%
 """
 DAILY KEYWORD BIDDING ALGORITHM BING
@@ -253,12 +185,6 @@ reporting_df_bkp = reporting_df
 # # TODO: address roughly 3k in "un-accounted" revenue
 # reporting_df[reporting_df["account_id"].isna()]["rev"].sum()
 # reporting_df[reporting_df["keyword_id"].isna()]["rev"].sum()
-#%%
-reporting_df
-#%%
-df.reset_index().set_index("keyword").join(
-    reporting_df.drop_duplicates("keyword").set_index("keyword")["latest_max_cpc"]) \
-        .sort_values(by="revenue",ascending=False)
 #%%
 reporting_df = reporting_df_bkp
 
@@ -676,21 +602,34 @@ kwdf = pd.concat((
 
 profitableI = (kwdf["rev"] / kwdf["cost"]) > 0.95
 deadI = kwdf['clicks7d'] < (kwdf['clicks60d'] * 7 / 60 * 0.5)
-#%%
 kwdf[profitableI & deadI].sum()
-#%%
-kwdf[profitableI & deadI]
-#%%
-kwdf
 #%%
 kwdf = kwdf .join(
     df_bid.set_index("keyword_id") \
-        [["adgroup","keyword","rpc_est","cpc_observed","cpc_target","max_cpc_old","max_cpc_new"]],
+        [["adgroup_id","adgroup","keyword","rpc_est","cpc_observed","cpc_target","max_cpc_old","max_cpc_new"]],
     how='left',rsuffix="_") \
     .sort_values(by="cost",ascending=False)
+kwdf.index.name = "keyword_id"
 kwdf[profitableI & deadI].head(20)
 #%%
-
+kwdf = kwdf.reset_index()
+kwdf[["adgroup_id", "keyword"]] = kwdf[["adgroup_id", "keyword"]].astype(str)
+rps_est_df = rps_est_df.reset_index()
+rps_est_df[["adgroup_id", "keyword"]] = rps_est_df[["adgroup_id", "keyword"]].astype(str)
+kwdf = kwdf.set_index(["adgroup_id","keyword"]).join(
+    rps_est_df.set_index(["adgroup_id", "keyword"])["rps_est"].to_frame("rps_est_tree")) \
+            .set_index("keyword_id") \
+        .sort_values(by="cost",ascending=False)
+kwdf
+#%%
+kwdf["max_cpc_tree"] = kwdf["rps_est_tree"] / ROI_TARGET
+voldelt = (kwdf["max_cpc_tree"] / kwdf["max_cpc_old"]).replace([np.inf, -np.inf], np.nan). fillna(1)
+(kwdf[["cost7d","clicks7d","rev7d"]] * voldelt.values.reshape(-1,1)).sum()
+#%%
+kwdf["max_cpc_tree"] = kwdf["rps_est_tree"] / ROI_TARGET
+voldelt = (kwdf["cpc_target"] / kwdf["max_cpc_old"]).replace([np.inf, -np.inf], np.nan). fillna(1)
+(kwdf[["cost7d","clicks7d","rev7d"]] * voldelt.values.reshape(-1,1)).sum()
+#%%
 """
 rps = rpl * lpc
     = rpl_short * rpl_mod_long * lpc_short * lpc_mod_long
