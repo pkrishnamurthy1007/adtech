@@ -29,14 +29,15 @@ import pandas as pd
 camp = "361640619"
 adgp = "1283130453341861"
 kwd = "medicare part b"
-I = (rps_df["campaign_id"] == camp) & (rps_df["adgroup_id"] == adgp) & (rps_df["keyword"] == kwd)
-df = rps_df[I].set_index("utc_dt")
+dt_rollup_I = (rps_df["campaign_id"] == camp) & (rps_df["adgroup_id"] == adgp) & (rps_df["keyword"] == kwd)
+df = rps_df[dt_rollup_I].set_index("utc_dt")
 (df['revenue'] / df['sessions']).rolling(7).mean().plot()
 #%%
 df['sessions'].rolling(7).mean().plot()
 #%%
 df['revenue'].rolling(7).mean().plot()
 #%%
+
 """
 we want rps estimation to do 2 contradictory things:
 1. respond to short term changes in (rps,lps,rpl,etc....) 
@@ -45,73 +46,60 @@ we want rps estimation to do 2 contradictory things:
 I think the process we use for rps estimation needs to be separate from the process
 we use to "revive" low volume keywords
 """
+import numpy as np
+
 self = rps_model
 X = rps_df.set_index([*split_cols, "utc_dt"]).copy()
 y = X["revenue"]
 w = X["sessions"]
-sample_thresh=100
+sample_thresh=300
 
-X["clust"] = self.transform(X)
-#%%
-Xdf = X
-X = X .reset_index()[X.index.names].iloc[:, :-1]
+Xyw = pd.concat((X[[]],y,w),axis=1)
+Xyw = Xyw.sort_index(level="utc_dt")
+
+X = Xyw .reset_index()[Xyw.index.names].iloc[:, :-1]
 X = self.enc_1hot.transform(X)
 print("|X|", X.shape)
 P = self.clf.decision_path(X)
-P
+Pdf = pd.DataFrame(P.todense(),index=Xyw.index)
+
+Xyw["clust"] = self.transform(Xyw)
+Pdf["clust"] = self.transform(Xyw)
+
+Xyw = Xyw.groupby(["clust","utc_dt"]).sum() .sort_index(level="utc_dt")
+y = Xyw.iloc[:,0]
+w = Xyw.iloc[:,1]
+Pdf = Pdf.groupby(["clust","utc_dt"]).first() .sort_index(level="utc_dt")
+time_decay = (1 - 0.03) ** (TODAY - 1*DAY - Pdf.reset_index()["utc_dt"].dt.date).dt.days
+y_Pdf = Pdf * y.values.reshape(-1,1) * time_decay.values.reshape(-1,1)
+w_Pdf = Pdf * w.values.reshape(-1,1) * time_decay.values.reshape(-1,1)
+
+y_agg_Pdf = y_Pdf.sum(level="utc_dt").reindex(pd.date_range(start_date,end_date)).fillna(0) \
+    .rolling(7).mean()
+w_agg_Pdf = w_Pdf.sum(level="utc_dt").reindex(pd.date_range(start_date,end_date)).fillna(0) \
+    .rolling(7).mean()
+Pdf = Pdf.groupby("clust").first()
+
+y_cum_Pdf = y_agg_Pdf.iloc[::-1,:].cumsum(axis=0).iloc[::-1,:]
+w_cum_Pdf = w_agg_Pdf.iloc[::-1,:].cumsum(axis=0).iloc[::-1,:]
+
+dt_rollup_I = np.clip(w_cum_Pdf,0,sample_thresh).iloc[::-1].idxmax()
+w_dt_rollup = w_cum_Pdf.unstack()[dt_rollup_I.items()]
+y_dt_rollup = y_cum_Pdf.unstack()[dt_rollup_I.items()]
+
+w_dt_rollup_Pdf = Pdf * w_dt_rollup.values.reshape(1,-1)
+y_dt_rollup_Pdf = Pdf * y_dt_rollup.values.reshape(1,-1)
+tree_rollup_I = np.clip(w_dt_rollup_Pdf,0,sample_thresh).iloc[:,::-1].idxmax(axis=1)
+
+w_rollup = w_dt_rollup_Pdf.stack()[tree_rollup_I.items()] 
+y_rollup = y_dt_rollup_Pdf.stack()[tree_rollup_I.items()]
+
+rpc = y_rollup / w_rollup
 #%%
-
+rps_df = rps_df.join(rpc.reset_index(level=1,drop=True).to_frame("rps_est"),on="clust")
 #%%
-Pdf = pd.DataFrame(P.todense(),index=Xdf.index)
-y_Pdf = Pdf * y.values.reshape(-1,1)
-w_Pdf = Pdf * w.values.reshape(-1,1)
-y_agg_Pdf = Pdf * y_Pdf.groupby("utc_dt").transform(sum)
-w_agg_Pdf = Pdf * w_Pdf.groupby("utc_dt").transform(sum)
-
-# SAMPLE_THRESH = 100
-# I = (~(session_agg_Pdf < SAMPLE_THRESH)).iloc[:,::-1].idxmax(axis=1)
-# I = np.eye(self.clf.tree_.node_count).astype(bool)[I]
-
-# rev_rollup = (revenue_agg_Pdf * I).sum(axis=1)
-# sess_rollup = (session_agg_Pdf * I).sum(axis=1)
-# rps_rollup = rev_rollup / sess_rollup
-# rps_rollup
-
-def running_suffix_max(df):
-    df_running_max = df.copy()
-    H, W = df_running_max.shape
-    for ci in reversed(range(W-1)):
-        df_running_max.iloc[:, ci] = np.maximum(
-            df_running_max.iloc[:, ci], df_running_max.iloc[:, ci+1])
-    return df_running_max
-
-y_contrib_Pdf = y_agg_Pdf - running_suffix_max(y_agg_Pdf).shift(-1,axis=1).fillna(0)
-w_contrib_Pdf = w_agg_Pdf - running_suffix_max(w_agg_Pdf).shift(-1,axis=1).fillna(0)
-y_contrib_Pdf = np.maximum(0,y_contrib_Pdf)
-w_contrib_Pdf = np.maximum(0,w_contrib_Pdf)
-
-"""
-total_sess = 0
-total_rev = 0
-while total_sess < THRESH - scan up through decision tree path:
-    rollup_factor = min(n.sessions,THRESH - total_sess) / n.sessions
-    total_sess += n.sessions * rollup_factor
-    total_rev += n.rev * rollup_factor
-ROAS = total_rev / total_sess
-"""
-H,W = w_contrib_Pdf.shape
-total_w = w_contrib_Pdf.iloc[:,-1]
-total_y  = y_contrib_Pdf.iloc[:,-1]
-import tqdm
-for ni in tqdm.tqdm(reversed(w_contrib_Pdf.columns[:-1])):
-    wni = w_contrib_Pdf.iloc[:, ni]
-    yni = y_contrib_Pdf.iloc[:,ni]
-    rollup_factor = np.clip((sample_thresh - total_w) / wni, 0, 1).fillna(0)
-    total_w += wni * rollup_factor
-    total_y += yni * rollup_factor 
-#%%
-rps_df["rps_est"] = rps_model.predict(
-    rps_df.set_index([*split_cols, "utc_dt"]))
+# rps_df["rps_est"] = rps_model.predict(
+#     rps_df.set_index([*split_cols, "utc_dt"]))
 
 rps_df_campaign = rps_df[rps_df["utc_dt"].dt.date > TODAY - 7*DAY] \
     .groupby(["campaign_id"])[["rps_est"]] \
@@ -126,22 +114,32 @@ rps_df_keyword = rps_df[rps_df["utc_dt"].dt.date > TODAY - 7*DAY] \
 # rps_df["clust_leads"] = rps_df.groupby(["utc_dt","clust"])["leads"].transform(sum)
 # rps_df["clust_revenue"] = rps_df.groupby(["utc_dt","clust"])["revenue"].transform(sum)
 #%%
-rps_df["rps_est"]
-#%%
-df = rps_df.groupby(["product","campaign_id","adgroup_id","keyword"]).agg({
+rps_est_df = rps_df.groupby(["product","campaign_id","adgroup_id","keyword"]).agg({
     "revenue": sum,
     "sessions": sum,
     "rps_est": get_wavg_by(rps_df,"sessions"),
 }) .sort_values(by="revenue",ascending=False)
-df
+rps_est_df
+#%%
+rps_est_df.loc[U65]
+#%%
+rps_est_df = rps_est_df.reset_index().set_index("keyword").join(
+    reporting_df.drop_duplicates("keyword",keep="last").set_index("keyword")[["latest_max_cpc","max_cpc"]]) \
+        .sort_values(by="revenue",ascending=False)
+#%%
+rps_est_df[rps_est_df["product"] == U65]
+#%%
+rps_est_df.loc["+obamacare +cost"]
+#%%
+reporting_df.drop_duplicates("keyword",keep="last").set_index("keyword")[["latest_max_cpc","max_cpc"]]
 #%%
 DAY = datetime.timedelta(1)
 from matplotlib import pyplot as plt
 kwd = "+molina +insurance"
 # kwd = "+obamacare +cost"
-I = reporting_df["keyword"] == kwd
-reporting_df[I][["rev","cost","clicks"]].sum()
-df = reporting_df[I].set_index("date").sort_index()[["rev","cost","clicks","max_cpc"]].rolling(7).sum()
+dt_rollup_I = reporting_df["keyword"] == kwd
+reporting_df[dt_rollup_I][["rev","cost","clicks"]].sum()
+df = reporting_df[dt_rollup_I].set_index("date").sort_index()[["rev","cost","clicks","max_cpc"]].rolling(7).sum()
 df["ROAS"] = df["rev"] / df["cost"]
 df.plot()
 plt.xlim([TODAY - 90*DAY,TODAY])
@@ -255,6 +253,12 @@ reporting_df_bkp = reporting_df
 # # TODO: address roughly 3k in "un-accounted" revenue
 # reporting_df[reporting_df["account_id"].isna()]["rev"].sum()
 # reporting_df[reporting_df["keyword_id"].isna()]["rev"].sum()
+#%%
+reporting_df
+#%%
+df.reset_index().set_index("keyword").join(
+    reporting_df.drop_duplicates("keyword").set_index("keyword")["latest_max_cpc"]) \
+        .sort_values(by="revenue",ascending=False)
 #%%
 reporting_df = reporting_df_bkp
 
@@ -396,11 +400,11 @@ reporting_df.loc[geoI,"adgroup_norm"] = reporting_df \
     .loc[geoI,"adgroup"] \
     .str.replace(unified_state_regex,STATE_TAG)
 
-I = reporting_df[["keyword","adgroup"]].values == reporting_df[["keyword_norm","adgroup_norm"]]
-I = (I.prod(axis=1) == 1) | reporting_df["keyword"].isna()
-I.mean(),I[~geoI].mean(),I[geoI].mean() 
-assert I[~geoI].mean() == 1
-assert I[geoI].mean() == 0
+dt_rollup_I = reporting_df[["keyword","adgroup"]].values == reporting_df[["keyword_norm","adgroup_norm"]]
+dt_rollup_I = (dt_rollup_I.prod(axis=1) == 1) | reporting_df["keyword"].isna()
+dt_rollup_I.mean(),dt_rollup_I[~geoI].mean(),dt_rollup_I[geoI].mean() 
+assert dt_rollup_I[~geoI].mean() == 1
+assert dt_rollup_I[geoI].mean() == 0
 assert all(reporting_df.loc[geoI,"keyword_norm"].str.contains(STATE_TAG))
 assert all(reporting_df.loc[geoI,"adgroup_norm"].str.contains(STATE_TAG))
 
@@ -498,8 +502,8 @@ print("|df_bid|", df_bid.shape)
 print("portion of reporting rows that are geo-granular:",reporting_df["geoI"].mean())
 print("portion of keywords that are geo-granular:",
       reporting_df[["bid_key", "geoI"]].drop_duplicates()["geoI"].mean())
-I = reporting_df.groupby("campaign")["geoI"].sum() > 0
-print("portion of campaigns that are geo-granular:",I.mean())
+dt_rollup_I = reporting_df.groupby("campaign")["geoI"].sum() > 0
+print("portion of campaigns that are geo-granular:",dt_rollup_I.mean())
 print("portion of bid updates that are geo_granular:",df_bid["geoI"].mean())
 
 assert all(df_bid.isna().sum() == 0), df_bid.isna().sum()
@@ -633,9 +637,9 @@ DAY = datetime.timedelta(1)
 from matplotlib import pyplot as plt
 kwd = "+molina +insurance"
 # kwd = "+obamacare +cost"
-I = reporting_df["keyword"] == kwd
-reporting_df[I][["rev","cost","clicks"]].sum()
-df = reporting_df[I].set_index("date").sort_index()[["rev","cost","clicks","max_cpc"]].rolling(7).sum()
+dt_rollup_I = reporting_df["keyword"] == kwd
+reporting_df[dt_rollup_I][["rev","cost","clicks"]].sum()
+df = reporting_df[dt_rollup_I].set_index("date").sort_index()[["rev","cost","clicks","max_cpc"]].rolling(7).sum()
 df["ROAS"] = df["rev"] / df["cost"]
 df.plot()
 plt.xlim([TODAY - 90*DAY,TODAY])

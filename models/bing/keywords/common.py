@@ -20,6 +20,7 @@ import pytz
 import datetime
 NOW = datetime.datetime.now(pytz.timezone('EST'))
 TODAY = NOW.date()
+DAY = datetime.timedelta(days=1)
 #%%
 from ds_utils.db.connectors import HealthcareDW
 # TODO: pull down keywords for all active campaigns in data window as kw df
